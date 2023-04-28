@@ -1,6 +1,7 @@
 package ipoverlay
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log"
 	"time"
@@ -35,7 +36,7 @@ func (obj *WebsocketKernelClient) GetProtocol() string {
 // Stellt eine neue Websocket Verbindung her
 func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey) error {
 	// Log
-	fmt.Printf("Trying to establish a websocket connection to %s -- %s\n", url, pub_key)
+	fmt.Printf("Trying to establish a websocket connection to %s -- %s\n", url, hex.EncodeToString(pub_key.SerializeCompressed()))
 
 	// Es wird versucht eine Websocket verbindung aufzubauen
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)

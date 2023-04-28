@@ -34,39 +34,6 @@ type Kernel struct {
 	_temp_key_pairs        map[string]*btcec.PrivateKey
 }
 
-// Stellt das Gerüst für ein Server Modul dar
-type ServerModule interface {
-	RegisterKernel(kernel *Kernel) error
-	GetObjectId() string
-	GetProtocol() string
-	Start() error
-	Shutdown()
-}
-
-// Gibt den Datentypen an, welcher von einem Client Module zurückgegeben wird
-type ClientModuleMetaData struct {
-}
-
-// Stellt ein Client Modul dar
-type ClientModule interface {
-	GetObjectId() string
-	RegisterKernel(kernel *Kernel) error
-	GetMetaDataInfo() ClientModuleMetaData
-	ConnectTo(string, *btcec.PublicKey) error
-	GetProtocol() string
-	Shutdown()
-}
-
-// Stellt eine Verbindung dar
-type RelayConnection interface {
-	IsConnected() bool
-}
-
-// Stellt die Module Funktionen bereit
-type ExternalModule interface {
-	Info() error
-}
-
 // Erstellt einen OSX Kernel
 func CreateOSXKernel(priv_key string) (*Kernel, error) {
 	// Log
@@ -248,13 +215,13 @@ func (obj *Kernel) RegisterClientModule(csep ClientModule) error {
 }
 
 // Gibt eine Liste mit allen Verfügbaren Relays zurück
-func (obj *Kernel) GetRelays() ([]*Relay, error) {
+func (obj *Kernel) GetTrustedRelays() ([]*Relay, error) {
 	return nil, nil
 }
 
 // Gibt einen Relay anhand seinens PublicKeys zurück
-func (obj *Kernel) GetRelayByPublicKey(pkey *btcec.PublicKey) (*Relay, error) {
-	_, err := obj.GetRelays()
+func (obj *Kernel) GetTrustedRelayByPublicKey(pkey *btcec.PublicKey) (*Relay, error) {
+	_, err := obj.GetTrustedRelays()
 	if err != nil {
 		return nil, err
 	}
@@ -263,12 +230,24 @@ func (obj *Kernel) GetRelayByPublicKey(pkey *btcec.PublicKey) (*Relay, error) {
 }
 
 // Markiert einen Relay als Verbunden
-func (obj *Kernel) MarkRelayAsConnected(relay *Relay, conn RelayConnection) error {
+func (obj *Kernel) AddNewConnection(relay *Relay, conn RelayConnection) error {
+	// Sollte kein Relay vorhanden sein, wird die Verbindung als nicht Verifiziert gespeichert
+	if err := obj._connection_manager.RegisterNewRelayConnection(relay, conn); err != nil {
+		return err
+	}
+
+	// Der Vorgang wurde erfolgreich druchgeführt
 	return nil
 }
 
 // Markiert einen Relay als nicht mehr Verbunden
-func (obj *Kernel) MarkRelayAsDisconnected(relay *Relay, conn RelayConnection) error {
+func (obj *Kernel) RemoveConnection(relay *Relay, conn RelayConnection) error {
+	// Sollte kein Relay vorhanden sein, wird die Verbindung als nicht Verifiziert gespeichert
+	if err := obj._connection_manager.RemoveRelayConnection(relay, conn); err != nil {
+		return err
+	}
+
+	// Der Vorgang wurde erfolgreich druchgeführt
 	return nil
 }
 
@@ -330,10 +309,14 @@ func (obj *Kernel) GetKernelID() string {
 }
 
 // Gibt eine Liste mit Verfügabren Relays aus mit denen eine Verbindung möglich ist
-func (obj *Kernel) ListOutboundAvaileRelays() ([]RelayOutboundPair, error) {
+func (obj *Kernel) ListOutboundTrustedAvaileRelays() ([]RelayOutboundPair, error) {
+	// Es werden alle Endpunkte abgerufen für welches das Protokoll bekannt ist
 	filtered_list := []RelayOutboundPair{}
 	for _, x := range obj._trusted_relays.GetAllRelays() {
 		if len(x._type) > 1 {
+			if obj._connection_manager.RelayIsConnected(x) {
+				continue
+			}
 			recov_entry := RelayOutboundPair{_relay: x}
 			for _, r := range obj._client_modules {
 				vat := *r
@@ -348,6 +331,8 @@ func (obj *Kernel) ListOutboundAvaileRelays() ([]RelayOutboundPair, error) {
 			filtered_list = append(filtered_list, recov_entry)
 		}
 	}
+
+	// Es wird eine List mit Vertrauenswürdigen Relays zurückgegeben, mit denen im moment noch keinen Verbindung besteht
 	return filtered_list, nil
 }
 

@@ -106,7 +106,16 @@ func loadTrustedRelaysTable(path string) (TrustedRelays, error) {
 			}
 
 			// Das Objekt wird wieder hergestellt
-			retrived_relay := Relay{_db_id: db_uid, _hexed_id: db_hex_id, _type: db_type, _end_point: end_point, _last_used: uint64(last_used), _active: is_active, _public_key: pkey, _trusted: true}
+			retrived_relay := Relay{
+				_db_id:      db_uid,
+				_hexed_id:   db_hex_id,
+				_type:       db_type,
+				_end_point:  end_point,
+				_last_used:  uint64(last_used),
+				_active:     is_active,
+				_public_key: pkey,
+				_trusted:    true,
+			}
 
 			// Die Verbindung wird zwischen gespeichert
 			re_relays = append(re_relays, &retrived_relay)

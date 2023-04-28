@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/fluffelpuff/RoueX/kernel"
 	"github.com/fxamacker/cbor"
@@ -188,11 +189,19 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	}
 
 	// Es wird geprüft ob es sich um einen bekannten Relay handelt
-	relay_pkyobj, err := obj._kernel.GetRelayByPublicKey(pub_client_key)
+	relay_pkyobj, err := obj._kernel.GetTrustedRelayByPublicKey(pub_client_key)
 	if err != nil {
 		fmt.Println(err)
 		conn.Close()
 		return
+	}
+
+	// Die Aktuelle Zeit wird ermittelt
+	c_time := time.Now().Unix()
+
+	// Solte kein Vertrauenswürdiger Relay vorhanden sein, wird ein Temporärer Relay erzeugt
+	if relay_pkyobj == nil {
+		relay_pkyobj = kernel.NewUntrustedRelay(pub_client_key, c_time, r.Host, "ws")
 	}
 
 	// Das Verbindungsobjekt wird erstellt
@@ -207,7 +216,7 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	}
 
 	// Die Verbindung wird registriert
-	if err := obj._kernel.MarkRelayAsConnected(relay_pkyobj, conn_obj); err != nil {
+	if err := obj._kernel.AddNewConnection(relay_pkyobj, conn_obj); err != nil {
 		fmt.Println(err)
 		conn.Close()
 		return

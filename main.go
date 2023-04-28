@@ -11,7 +11,7 @@ import (
 )
 
 func outboundHandler(core *kernel.Kernel) {
-	rt, err := core.ListOutboundAvaileRelays()
+	rt, err := core.ListOutboundTrustedAvaileRelays()
 	if err != nil {
 		panic(err)
 	}
