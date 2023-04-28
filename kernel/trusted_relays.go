@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"sync"
@@ -94,8 +95,18 @@ func loadTrustedRelaysTable(path string) (TrustedRelays, error) {
 				is_active = true
 			}
 
+			// Es wird versucht den Öffentlichen Schlüssel einzulesn
+			decoded_pkey, err := hex.DecodeString(public_key)
+			if err != nil {
+				return TrustedRelays{}, err
+			}
+			pkey, err := ReadPublicKeyFromByteSlice(decoded_pkey)
+			if err != nil {
+				return TrustedRelays{}, err
+			}
+
 			// Das Objekt wird wieder hergestellt
-			retrived_relay := Relay{_db_id: db_uid, _hexed_id: db_hex_id, _type: db_type, _end_point: end_point, _last_used: uint64(last_used), _active: is_active, _public_key: public_key, _trusted: true}
+			retrived_relay := Relay{_db_id: db_uid, _hexed_id: db_hex_id, _type: db_type, _end_point: end_point, _last_used: uint64(last_used), _active: is_active, _public_key: pkey, _trusted: true}
 
 			// Die Verbindung wird zwischen gespeichert
 			re_relays = append(re_relays, &retrived_relay)

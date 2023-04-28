@@ -14,3 +14,11 @@ func RandStringRunes(n int) string {
 	}
 	return fmt.Sprintf("@%s", string(b))
 }
+
+func randProcId() string {
+	b := make([]rune, 16)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}

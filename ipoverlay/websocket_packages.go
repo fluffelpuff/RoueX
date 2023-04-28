@@ -9,9 +9,9 @@ type EncryptedClientHelloPackage struct {
 }
 
 type EncryptedServerHelloPackage struct {
-	PublicServerKey   []byte `cbor:"6,keyasint"`
-	PublicClientKey   []byte `cbor:"7,keyasint"`
-	ServerSig         []byte `cbor:"8,keyasint"`
-	RandServerPKey    []byte `cbor:"9,keyasint"`
-	RandServerPKeySig []byte `cbor:"10,keyasint"`
+	PublicServerKey   []byte `cbor:"7,keyasint"`
+	PublicClientKey   []byte `cbor:"8,keyasint"`
+	ServerSig         []byte `cbor:"9,keyasint"`
+	RandServerPKey    []byte `cbor:"10,keyasint"`
+	RandServerPKeySig []byte `cbor:"11,keyasint"`
 }

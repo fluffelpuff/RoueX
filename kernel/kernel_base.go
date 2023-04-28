@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -9,6 +10,8 @@ import (
 	"plugin"
 	"sync"
 
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/fluffelpuff/RoueX/static"
 )
 
@@ -27,7 +30,8 @@ type Kernel struct {
 	_client_modules        []*ClientModule
 	_connection_manager    ConnectionManager
 	_firewall              *Firewall
-	_private_key           string
+	_private_key           *btcec.PrivateKey
+	_temp_key_pairs        map[string]*btcec.PrivateKey
 }
 
 // Stellt das Gerüst für ein Server Modul dar
@@ -48,13 +52,14 @@ type ClientModule interface {
 	GetObjectId() string
 	RegisterKernel(kernel *Kernel) error
 	GetMetaDataInfo() ClientModuleMetaData
-	ConnectTo(string, string) error
+	ConnectTo(string, *btcec.PublicKey) error
 	GetProtocol() string
 	Shutdown()
 }
 
 // Stellt eine Verbindung dar
 type RelayConnection interface {
+	IsConnected() bool
 }
 
 // Stellt die Module Funktionen bereit
@@ -64,7 +69,25 @@ type ExternalModule interface {
 
 // Erstellt einen OSX Kernel
 func CreateOSXKernel(priv_key string) (*Kernel, error) {
+	// Log
 	fmt.Println("Creating new RoueX OSX Kernel...")
+
+	// Der Öffentliche Schlüssel wird dekodiert
+	decoded_priv_key, err := hex.DecodeString(priv_key)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sollte der Private Schlüssel keine 32 Bytes groß sein wird der Vorgang abgebrochen
+	if len(decoded_priv_key) != 32 {
+		return nil, fmt.Errorf("invalid private key length")
+	}
+
+	// Der Private Schlüssel wird als Objekt eingelesen
+	dec_object, err := ReadPrivateKeyFromByteSlice(decoded_priv_key)
+	if err != nil {
+		return nil, err
+	}
 
 	// Es wird eine Liste mit allen Vertrauten Relays abgerufen
 	trusted_relays_obj, err := loadTrustedRelaysTable(static.OSX_TRUSTED_RELAYS_PATH)
@@ -109,8 +132,9 @@ func CreateOSXKernel(priv_key string) (*Kernel, error) {
 		_os_path_trimmer:       "/",
 		_kernel_id:             k_id,
 		_connection_manager:    conn_manager,
-		_private_key:           priv_key,
+		_private_key:           dec_object,
 		_lock:                  new(sync.Mutex),
+		_temp_key_pairs:        make(map[string]*secp256k1.PrivateKey),
 		_socket_path:           static.OSX_NO_ROOT_API_SOCKET,
 		_routing_table:         &routing_table_obj,
 		_firewall:              firewall_table_obj,
@@ -228,13 +252,23 @@ func (obj *Kernel) GetRelays() ([]*Relay, error) {
 	return nil, nil
 }
 
+// Gibt einen Relay anhand seinens PublicKeys zurück
+func (obj *Kernel) GetRelayByPublicKey(pkey *btcec.PublicKey) (*Relay, error) {
+	_, err := obj.GetRelays()
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
 // Markiert einen Relay als Verbunden
-func (obj *Kernel) MarkRelayAsConnected(relay Relay, conn *RelayConnection) error {
+func (obj *Kernel) MarkRelayAsConnected(relay *Relay, conn RelayConnection) error {
 	return nil
 }
 
 // Markiert einen Relay als nicht mehr Verbunden
-func (obj *Kernel) MarkRelayAsDisconnected(relay Relay, conn *RelayConnection) error {
+func (obj *Kernel) MarkRelayAsDisconnected(relay *Relay, conn RelayConnection) error {
 	return nil
 }
 
@@ -315,4 +349,58 @@ func (obj *Kernel) ListOutboundAvaileRelays() ([]RelayOutboundPair, error) {
 		}
 	}
 	return filtered_list, nil
+}
+
+// Gibt den Öffentlichen Schlüssel des Relays aus
+func (obj *Kernel) GetPublicKey() *btcec.PublicKey {
+	return obj._private_key.PubKey()
+}
+
+// Erstellt ein neues Schlüsselpaar, der Zugriff auf den Privaten Schlüssel ist nicht möglich
+func (obj *Kernel) CreateNewTempKeyPair() (string, error) {
+	rid := randProcId()
+	priv_k, err := GeneratePrivateKey()
+	if err != nil {
+		return "", err
+	}
+
+	obj._lock.Lock()
+	obj._temp_key_pairs[rid] = priv_k
+	obj._lock.Unlock()
+
+	return rid, nil
+}
+
+// Gibt einen Öffentlichen Temporären Schlüssel anhand seiner ID aus
+func (obj *Kernel) GetPublicTempKeyById(temp_key_id string) (*btcec.PublicKey, error) {
+	obj._lock.Lock()
+	priv_key, ok := obj._temp_key_pairs[temp_key_id]
+	if !ok {
+		obj._lock.Unlock()
+		return nil, fmt.Errorf("not found")
+	}
+	obj._lock.Unlock()
+	return priv_key.PubKey(), nil
+}
+
+// Wird verwendet um eine Signatur mit dem Relay Key zu Signieren
+func (obj *Kernel) SignWithRelayKey(digest []byte) ([]byte, error) {
+	return Sign(obj._private_key, digest)
+}
+
+// Wird verwendet um einen Hash mit Temprären Schlüssel zu Signieren
+func (obj *Kernel) SignWithTempKeyId(temp_key_id string, digest []byte) ([]byte, error) {
+	obj._lock.Lock()
+	priv_key, ok := obj._temp_key_pairs[temp_key_id]
+	if !ok {
+		obj._lock.Unlock()
+		return nil, fmt.Errorf("not found")
+	}
+	obj._lock.Unlock()
+	return Sign(priv_key, digest)
+}
+
+// Wird verwendet um einen Verschlüsselten Datensatz mit dem Privaten Relay Schlüssel zu enschlüsseln
+func (obj *Kernel) DecryptWithPrivateRelayKey(cipher_data []byte) ([]byte, error) {
+	return DecryptDataWithPrivateKey(obj._private_key, cipher_data)
 }

@@ -1,9 +1,11 @@
 package kernel
 
+import "github.com/btcsuite/btcd/btcec/v2"
+
 type Relay struct {
 	_db_id      int64
 	_hexed_id   string
-	_public_key string
+	_public_key *btcec.PublicKey
 	_last_used  uint64
 	_end_point  string
 	_active     bool
@@ -19,7 +21,7 @@ func (obj *Relay) GetEndpoint() string {
 	return obj._end_point
 }
 
-func (obj *Relay) GetPublicKey() string {
+func (obj *Relay) GetPublicKey() *btcec.PublicKey {
 	return obj._public_key
 }
 
