@@ -1,7 +1,7 @@
 package kernel
 
 import (
-	"encoding/hex"
+	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -35,50 +35,33 @@ type Kernel struct {
 }
 
 // Erstellt einen OSX Kernel
-func CreateOSXKernel(priv_key string) (*Kernel, error) {
+func CreateOSXKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 	// Log
 	fmt.Println("Creating new RoueX OSX Kernel...")
 
-	// Der Öffentliche Schlüssel wird dekodiert
-	decoded_priv_key, err := hex.DecodeString(priv_key)
-	if err != nil {
-		return nil, err
-	}
-
-	// Sollte der Private Schlüssel keine 32 Bytes groß sein wird der Vorgang abgebrochen
-	if len(decoded_priv_key) != 32 {
-		return nil, fmt.Errorf("invalid private key length")
-	}
-
-	// Der Private Schlüssel wird als Objekt eingelesen
-	dec_object, err := ReadPrivateKeyFromByteSlice(decoded_priv_key)
-	if err != nil {
-		return nil, err
-	}
-
 	// Es wird eine Liste mit allen Vertrauten Relays abgerufen
-	trusted_relays_obj, err := loadTrustedRelaysTable(static.OSX_TRUSTED_RELAYS_PATH)
+	trusted_relays_obj, err := loadTrustedRelaysTable(static.GetFilePathFor(static.TRUSTED_RELAYS))
 	if err != nil {
 		log.Fatal("listen error:", err)
 		return nil, err
 	}
 
 	// Es wird versucht die Routing Tabelle zu laden
-	routing_table_obj, err := loadRoutingTable(static.OSX_ROUTING_TABLE_PATH)
+	routing_table_obj, err := loadRoutingTable(static.GetFilePathFor(static.ROUTING_TABLE))
 	if err != nil {
 		log.Fatal("listen error:", err)
 		return nil, err
 	}
 
 	// Es wird versucht die Firewall Tabelle zu ladne
-	firewall_table_obj, err := loadFirewallTable(static.OSX_FIREWALL_TABLE_PATH)
+	firewall_table_obj, err := loadFirewallTable(static.GetFilePathFor(static.FIREWALL_TABLE))
 	if err != nil {
 		log.Fatal("listen error:", err)
 		return nil, err
 	}
 
 	// Der Unix Socket wird vorbereitet
-	l, err := net.Listen("unix", static.OSX_NO_ROOT_API_SOCKET)
+	l, err := net.Listen("unix", static.GetFilePathFor(static.API_SOCKET))
 	if err != nil {
 		log.Fatal("listen error:", err)
 		return nil, err
@@ -99,10 +82,10 @@ func CreateOSXKernel(priv_key string) (*Kernel, error) {
 		_os_path_trimmer:       "/",
 		_kernel_id:             k_id,
 		_connection_manager:    conn_manager,
-		_private_key:           dec_object,
+		_private_key:           priv_key,
 		_lock:                  new(sync.Mutex),
 		_temp_key_pairs:        make(map[string]*secp256k1.PrivateKey),
-		_socket_path:           static.OSX_NO_ROOT_API_SOCKET,
+		_socket_path:           static.GetFilePathFor(static.API_SOCKET),
 		_routing_table:         &routing_table_obj,
 		_firewall:              firewall_table_obj,
 		_trusted_relays:        &trusted_relays_obj,
@@ -216,16 +199,20 @@ func (obj *Kernel) RegisterClientModule(csep ClientModule) error {
 
 // Gibt eine Liste mit allen Verfügbaren Relays zurück
 func (obj *Kernel) GetTrustedRelays() ([]*Relay, error) {
-	return nil, nil
+	return obj._trusted_relays.GetAllRelays(), nil
 }
 
 // Gibt einen Relay anhand seinens PublicKeys zurück
 func (obj *Kernel) GetTrustedRelayByPublicKey(pkey *btcec.PublicKey) (*Relay, error) {
-	_, err := obj.GetTrustedRelays()
+	relays, err := obj.GetTrustedRelays()
 	if err != nil {
 		return nil, err
 	}
-
+	for i := range relays {
+		if bytes.Equal(relays[i]._public_key.SerializeCompressed(), pkey.SerializeCompressed()) {
+			return relays[i], nil
+		}
+	}
 	return nil, nil
 }
 
@@ -236,6 +223,15 @@ func (obj *Kernel) AddNewConnection(relay *Relay, conn RelayConnection) error {
 		return err
 	}
 
+	// Der Kernel wird in der Verbindung registriert
+	if err := conn.RegisterKernel(obj); err != nil {
+		// Die Verbindung wird wieder aus dem Verbindungsmanager entfernt
+		obj._connection_manager.RemoveRelayConnection(conn)
+
+		// Der Vorgang wird mit einem Fehler abgebrochen
+		return err
+	}
+
 	// Der Vorgang wurde erfolgreich druchgeführt
 	return nil
 }
@@ -243,7 +239,7 @@ func (obj *Kernel) AddNewConnection(relay *Relay, conn RelayConnection) error {
 // Markiert einen Relay als nicht mehr Verbunden
 func (obj *Kernel) RemoveConnection(relay *Relay, conn RelayConnection) error {
 	// Sollte kein Relay vorhanden sein, wird die Verbindung als nicht Verifiziert gespeichert
-	if err := obj._connection_manager.RemoveRelayConnection(relay, conn); err != nil {
+	if err := obj._connection_manager.RemoveRelayConnection(conn); err != nil {
 		return err
 	}
 

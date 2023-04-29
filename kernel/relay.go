@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"encoding/hex"
 	"log"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -32,9 +33,19 @@ func (obj *Relay) GetPublicKey() *btcec.PublicKey {
 	return obj._public_key
 }
 
+// Gibt den Öffentlichen Schlüssel als hexstring aus
+func (obj *Relay) GetPublicKeyHexString() string {
+	return hex.EncodeToString(obj._public_key.SerializeCompressed())
+}
+
+// Gibt die HEXID aus
+func (obj *Relay) GetHexId() string {
+	return obj._hexed_id
+}
+
 // Erstellt ein nicht Vertrauenswürdiges Relay
 func NewUntrustedRelay(public_key *btcec.PublicKey, last_useed int64, end_point string, tpe string) *Relay {
-	log.Println("New temporary untrusted relay created")
+	log.Println("New temporary untrusted relay created", hex.EncodeToString(public_key.SerializeCompressed()))
 	return &Relay{_public_key: public_key, _last_used: uint64(last_useed), _type: tpe, _trusted: false, _end_point: end_point, _active: true, _hexed_id: "", _db_id: -1}
 }
 

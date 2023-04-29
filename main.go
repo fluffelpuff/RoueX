@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/signal"
@@ -8,28 +9,26 @@ import (
 
 	"github.com/fluffelpuff/RoueX/ipoverlay"
 	"github.com/fluffelpuff/RoueX/kernel"
+	"github.com/fluffelpuff/RoueX/keystore"
 )
 
-func outboundHandler(core *kernel.Kernel) {
-	rt, err := core.ListOutboundTrustedAvaileRelays()
+func main() {
+	// Die Einstellungen werden geladen
+	if err := loadConfigs(); err != nil {
+		panic(err)
+	}
+
+	// Es wird versucht den Privaten Schlüssel zu laden
+	pub_key, priv_key, err := keystore.LoadPrivateKeyFromKeyStore()
 	if err != nil {
 		panic(err)
 	}
 
-	for _, o := range rt {
-		client_conn := *o.GetClientConnModule()
-		err := client_conn.ConnectTo(o.GetRelay().GetEndpoint(), o.GetRelay().GetPublicKey())
-		if err != nil {
-			fmt.Println(err)
-		}
+	// Log
+	fmt.Println("Public relay key:", hex.EncodeToString(pub_key.SerializeCompressed()))
 
-		fmt.Println(o.GetRelay().GetProtocol(), o.GetRelay().GetEndpoint())
-	}
-}
-
-func main() {
 	// Das Passende Systemkernel wird erstellt
-	kernel_object, err := kernel.CreateOSXKernel("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	kernel_object, err := kernel.CreateOSXKernel(priv_key)
 	if err != nil {
 		panic(err)
 	}

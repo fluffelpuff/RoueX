@@ -24,7 +24,10 @@ func (obj *TrustedRelays) Shutdown() {
 }
 
 func (obj *TrustedRelays) GetAllRelays() []*Relay {
-	return obj._relays
+	obj._lock.Lock()
+	safe_copy := obj._relays
+	obj._lock.Unlock()
+	return safe_copy
 }
 
 func loadTrustedRelaysTable(path string) (TrustedRelays, error) {

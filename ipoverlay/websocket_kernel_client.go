@@ -36,7 +36,7 @@ func (obj *WebsocketKernelClient) GetProtocol() string {
 // Stellt eine neue Websocket Verbindung her
 func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey) error {
 	// Log
-	fmt.Printf("Trying to establish a websocket connection to %s -- %s\n", url, hex.EncodeToString(pub_key.SerializeCompressed()))
+	log.Printf("Trying to establish a websocket connection to %s -- %s\n", url, hex.EncodeToString(pub_key.SerializeCompressed()))
 
 	// Es wird versucht eine Websocket verbindung aufzubauen
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
@@ -45,7 +45,7 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 	}
 
 	// Log
-	fmt.Printf("The websocket base connection to %s has been established.\n", url)
+	log.Printf("The websocket base connection to %s has been established.\n", url)
 
 	// Es wird ein Temporäres Schlüsselpaar erstellt
 	key_pair_id, err := obj._kernel.CreateNewTempKeyPair()
@@ -57,6 +57,14 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 	temp_public_key, err := obj._kernel.GetPublicTempKeyById(key_pair_id)
 	if err != nil {
 		return fmt.Errorf("ConnectTo: 2: " + err.Error())
+	}
+
+	// Es wird geprüft ob es sich um einen bekannten Relay handelt
+	relay_pkyobj, err := obj._kernel.GetTrustedRelayByPublicKey(pub_key)
+	if err != nil {
+		fmt.Println(err)
+		conn.Close()
+		return nil
 	}
 
 	// Es wird ein Hash zum signieren erstellt 'SHA3_256(decoded_pkey || temp_public_key)'
@@ -95,9 +103,6 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 		return fmt.Errorf("ConnectTo: 6: " + err.Error())
 	}
 
-	// Die Zeit zum zeitpunkt des Absendens wird ermittelt
-	send_timestamp := time.Now()
-
 	// Die Daten werden übermittelt
 	send_err := conn.WriteMessage(websocket.BinaryMessage, encrypted_package)
 	if send_err != nil {
@@ -113,9 +118,6 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 	if err != nil {
 		return err
 	}
-
-	// Die Aktuelle Zeit wird ermittelt
-	recived_timestamp := time.Now()
 
 	// Sollte es sich nicht um eine Binäry Message handelt, wird der Vorgang abgebrochen und die Verbindung wird geschlossen
 	if messageType != websocket.BinaryMessage {
@@ -145,7 +147,7 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 	}
 
 	// Das Reading Timeout wird entfernt
-	if err := conn.SetReadDeadline(time.Unix(0, 0)); err != nil {
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
 		return err
 	}
 
@@ -156,13 +158,27 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 		return err
 	}
 
-	// Berechnen Sie die Ping-Zeit als Zeitunterschied zwischen dem Senden und Empfangen der Nachricht
-	pingTime := recived_timestamp.Sub(send_timestamp)
+	// Solte kein Vertrauenswürdiger Relay vorhanden sein, wird ein Temporärer Relay erzeugt
+	if relay_pkyobj == nil {
+		c_time := time.Now().Unix()
+		relay_pkyobj = kernel.NewUntrustedRelay(pub_key, c_time, url, "ws")
+		log.Println("Unkown relay", relay_pkyobj.GetHexId(), "connected")
+	} else {
+		log.Println("Trusted relay", relay_pkyobj.GetHexId(), "connected")
+	}
 
-	// Die Banbreite wird ausgerechnet
-	bandwidth := fmt.Sprintf("%.2f", float64(len(encrypted_package)+len(recived_message))/(pingTime.Seconds()*1024))
+	// Die Verbindung wird registriert
+	if err := obj._kernel.AddNewConnection(relay_pkyobj, finally_kernel_session); err != nil {
+		conn.Close()
+		return err
+	}
 
-	fmt.Println(finally_kernel_session, bandwidth)
+	// Die Verbindung wird final fertigestellt
+	if err := finally_kernel_session.FinallyInit(); err != nil {
+		obj._kernel.RemoveConnection(relay_pkyobj, finally_kernel_session)
+		conn.Close()
+		return err
+	}
 
 	// Der Gegenseite wird nun der eigene Öffentliche Schlüssel, die Aktuelle Uhrzeit sowie
 	return nil

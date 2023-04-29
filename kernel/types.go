@@ -27,10 +27,11 @@ type ClientModule interface {
 
 // Stellt eine Verbindung dar
 type RelayConnection interface {
-	IsConnected() bool
 	RegisterKernel(kernel *Kernel) error
-	Read() ([]byte, error)
+	GetObjectId() string
+	FinallyInit() error
 	Write([]byte) error
+	IsConnected() bool
 }
 
 // Stellt die Module Funktionen bereit

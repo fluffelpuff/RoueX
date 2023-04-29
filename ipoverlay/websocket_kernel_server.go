@@ -196,11 +196,9 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 		return
 	}
 
-	// Die Aktuelle Zeit wird ermittelt
-	c_time := time.Now().Unix()
-
 	// Solte kein Vertrauenswürdiger Relay vorhanden sein, wird ein Temporärer Relay erzeugt
 	if relay_pkyobj == nil {
+		c_time := time.Now().Unix()
 		relay_pkyobj = kernel.NewUntrustedRelay(pub_client_key, c_time, r.Host, "ws")
 	}
 
@@ -220,6 +218,12 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 		fmt.Println(err)
 		conn.Close()
 		return
+	}
+
+	// Die Verbindung wird final fertigestellt
+	if err := conn_obj.FinallyInit(); err != nil {
+		obj._kernel.RemoveConnection(relay_pkyobj, conn_obj)
+		conn.Close()
 	}
 }
 
