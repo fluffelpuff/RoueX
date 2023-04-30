@@ -66,6 +66,9 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 		return
 	}
 
+	// Die Aktuelle Zeit wird ermittelt
+	c_time := time.Now()
+
 	// Es wird auf das eintreffende Paket gewartet
 	mtype, message, err := conn.ReadMessage()
 	if err != nil {
@@ -202,14 +205,25 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 		relay_pkyobj = kernel.NewUntrustedRelay(pub_client_key, c_time, r.Host, "ws")
 	}
 
-	// Das Verbindungsobjekt wird erstellt
-	conn_obj, err := createFinallyKernelConnection(conn, key_pair_id, pub_client_key, pub_client_otk_key)
-
 	// Die Daten werden übermittelt
 	send_err := conn.WriteMessage(websocket.BinaryMessage, encrypted_package)
 	if send_err != nil {
 		fmt.Println(err)
 		conn.Close()
+		return
+	}
+
+	// Zeitdifferenz berechnen
+	total_ts_time := time.Until(c_time).Seconds()
+
+	// Bandbreite berechnen
+	bandwith_kbs := float64(float64(len(message))/total_ts_time) / 1024
+
+	// Das Verbindungsobjekt wird erstellt
+	conn_obj, err := createFinallyKernelConnection(conn, key_pair_id, pub_client_key, pub_client_otk_key, bandwith_kbs, int64(total_ts_time))
+	if err != nil {
+		conn.Close()
+		log.Println("error: ", err.Error())
 		return
 	}
 
@@ -224,6 +238,14 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	if err := conn_obj.FinallyInit(); err != nil {
 		obj._kernel.RemoveConnection(relay_pkyobj, conn_obj)
 		conn.Close()
+	}
+
+	// Die bekannten Routen für diese Verbindung (Relay) werden abgerufen
+	if err := obj._kernel.LoadAndActiveRoutesByRelay(relay_pkyobj); err != nil {
+		obj._kernel.RemoveConnection(relay_pkyobj, conn_obj)
+		log.Println("error:", err.Error())
+		conn.Close()
+		return
 	}
 }
 

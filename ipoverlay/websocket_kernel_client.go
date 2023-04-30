@@ -82,6 +82,9 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 		return fmt.Errorf("ConnectTo: 4: " + err.Error())
 	}
 
+	// Die Aktuelle Zeit wird ermittelt
+	c_time := time.Now()
+
 	// Das Verschlüsselt HelloClientPackage wird vorbereitet
 	plain_client_hello_package := EncryptedClientHelloPackage{
 		PublicServerKey:   pub_key.SerializeCompressed(),
@@ -151,8 +154,14 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 		return err
 	}
 
+	// Zeitdifferenz berechnen
+	total_ts_time := time.Until(c_time).Seconds()
+
+	// Bandbreite berechnen
+	bandwith_kbs := float64(float64(len(recived_message))/total_ts_time) / 1024
+
 	// Das Finale Sitzungsobjekt wird erstellt
-	finally_kernel_session, err := createFinallyKernelConnection(conn, key_pair_id, public_server_key, public_server_otk)
+	finally_kernel_session, err := createFinallyKernelConnection(conn, key_pair_id, public_server_key, public_server_otk, bandwith_kbs, int64(total_ts_time))
 	if err != nil {
 		conn.Close()
 		return err
@@ -175,6 +184,13 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 
 	// Die Verbindung wird final fertigestellt
 	if err := finally_kernel_session.FinallyInit(); err != nil {
+		obj._kernel.RemoveConnection(relay_pkyobj, finally_kernel_session)
+		conn.Close()
+		return err
+	}
+
+	// Die bekannten Routen für diese Verbindung (Relay) werden abgerufen
+	if err := obj._kernel.LoadAndActiveRoutesByRelay(relay_pkyobj); err != nil {
 		obj._kernel.RemoveConnection(relay_pkyobj, finally_kernel_session)
 		conn.Close()
 		return err

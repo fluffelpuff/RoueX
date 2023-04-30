@@ -11,12 +11,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Stellt eine Websocket Verbindung dar
 type WebsocketKernelConnection struct {
 	_object_id             string
 	_local_otk_key_pair    string
 	_total_reader_threads  uint8
 	_is_finally            bool
 	_signal_shutdown       bool
+	_ping                  []int64
+	_bandwith              []float64
 	_conn                  *websocket.Conn
 	_kernel                *kernel.Kernel
 	_dest_relay_public_key *btcec.PublicKey
@@ -36,20 +39,56 @@ func (obj *WebsocketKernelConnection) RegisterKernel(kernel *kernel.Kernel) erro
 }
 
 // Gibt an ob die Lesende Schleife ausgeführt werden kann
-func (obj *WebsocketKernelConnection) _loop_reader_run() bool {
+func (obj *WebsocketKernelConnection) _loop_bckg_run() bool {
 	obj._lock.Lock()
 	r := obj._signal_shutdown
 	obj._lock.Unlock()
 	return !r
 }
 
+// Wird ausgeführt um eine neue Pingzeit hinzuzufügen
+func (obj *WebsocketKernelConnection) _add_ping_time(time int64) {
+	obj._lock.Lock()
+	obj._ping = append(obj._ping, time)
+	obj._lock.Unlock()
+}
+
+// Wird ausgeführt um eine neuen Ping Vorgang zu Registrieren
+func (obj *WebsocketKernelConnection) _create_new_ping_session() []byte {
+	return nil
+}
+
 // Gibt an ob der Ping Pong test korrekt ist
 func (obj *WebsocketKernelConnection) __ping_pong() error {
+	// Diese Funktion wird als eigentliche Ping Funktion ausgeführt
+	pfnc := func(tobj *WebsocketKernelConnection) error {
+		// Es wird geprüft ob eine Verbindung vorhanden ist
+		if !tobj.IsConnected() {
+			return fmt.Errorf("is disconnected")
+		}
+
+		// Es wird ein neues Ping Paket registriert
+		ping_id := tobj._create_new_ping_session()
+
+		tobj._add_ping_time(0)
+		return nil
+	}
+
+	// Der erste Ping Vorgang wird durchgeführt, hierbei darf kein Fehler auftreten
+	err := pfnc(obj)
+	if err != nil {
+		return err
+	}
+
+	// Der Thread wird ausgeführt
+	go pfnc(obj)
+
+	// Der Vorgang wurde ohne Fehler fertigstetllt
 	return nil
 }
 
 // Nimmt eintreffende Pakete entgegen
-func (obj *WebsocketKernelConnection) _thread(rewolf chan string) {
+func (obj *WebsocketKernelConnection) _thread_reader(rewolf chan string) {
 	// Erzeugt den Funktions basierten Mutex
 	func_muutx := sync.Mutex{}
 
@@ -87,7 +126,7 @@ func (obj *WebsocketKernelConnection) _thread(rewolf chan string) {
 	}()
 
 	// Diese Schleife wird solange ausgeführt bis die Verbindung getrennt / geschlossen wurde
-	for obj._loop_reader_run() {
+	for obj._loop_bckg_run() {
 		// Es wird auf eintreffende Pakete gewartet
 		messageType, message, err := obj._conn.ReadMessage()
 		if err != nil {
@@ -124,6 +163,11 @@ func (obj *WebsocketKernelConnection) _thread(rewolf chan string) {
 	obj._lock.Unlock()
 }
 
+// Wird verwendet um ein Paket Abzusenden
+func (obj *WebsocketKernelConnection) _write_ws_package(pack EncryptedTransportPackage, tpe TransportPackageType) error {
+	return nil
+}
+
 // Stellt die Verbindung vollständig fertig
 func (obj *WebsocketKernelConnection) FinallyInit() error {
 	// Es wird geprüft ob bereits ein Reader gestartet wurde
@@ -136,7 +180,7 @@ func (obj *WebsocketKernelConnection) FinallyInit() error {
 
 	// Der Reader wird gestartet
 	io := make(chan string)
-	go obj._thread(io)
+	go obj._thread_reader(io)
 
 	// Es wird auf die Bestätigung durch den Reader gewartet
 	resolv := <-io
@@ -153,12 +197,15 @@ func (obj *WebsocketKernelConnection) FinallyInit() error {
 
 	// Es wird Signalisiert dass das Ojekt vollständig Finallisiert wurde
 	obj._is_finally = true
-
-	// Der Threadlock wird freigegeben
 	obj._lock.Unlock()
 
+	// Der Ping Bandwith Thread wird gestartet, es muss mindestens 1 Vorgang erfolgreich durchgeführt werden
+	if err := obj.__ping_pong(); err != nil {
+		return err
+	}
+
 	// Der Vorgang wurde ohne einen Fehler durchgeführt
-	log.Println("Finally")
+	log.Println("Finally connection", obj._object_id)
 	return nil
 }
 
@@ -178,7 +225,16 @@ func (obj *WebsocketKernelConnection) GetObjectId() string {
 }
 
 // Erstellt ein neues Kernel Sitzungs Objekt
-func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id string, relay_public_key *btcec.PublicKey, relay_otk_public_key *btcec.PublicKey) (*WebsocketKernelConnection, error) {
-	wkcobj := &WebsocketKernelConnection{_object_id: kernel.RandStringRunes(12), _conn: conn, _local_otk_key_pair: local_otk_key_pair_id, _dest_relay_public_key: relay_public_key, _lock: new(sync.Mutex), _signal_shutdown: false}
+func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id string, relay_public_key *btcec.PublicKey, relay_otk_public_key *btcec.PublicKey, bandwith float64, ping_time int64) (*WebsocketKernelConnection, error) {
+	wkcobj := &WebsocketKernelConnection{
+		_object_id:             kernel.RandStringRunes(12),
+		_local_otk_key_pair:    local_otk_key_pair_id,
+		_dest_relay_public_key: relay_public_key,
+		_lock:                  new(sync.Mutex),
+		_signal_shutdown:       false,
+		_ping:                  []int64{ping_time},
+		_bandwith:              []float64{bandwith},
+		_conn:                  conn,
+	}
 	return wkcobj, nil
 }

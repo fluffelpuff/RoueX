@@ -15,3 +15,6 @@ type EncryptedServerHelloPackage struct {
 	RandServerPKey    []byte `cbor:"10,keyasint"`
 	RandServerPKeySig []byte `cbor:"11,keyasint"`
 }
+
+type EncryptedTransportPackage struct {
+}

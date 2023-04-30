@@ -7,16 +7,19 @@ import (
 	"sync"
 )
 
+// Stellt eine Verbindungspaar dar
 type _connection_io_pair struct {
 	_relay *Relay
 	_conn  []*RelayConnection
 }
 
+// Stellt den Verbindungsmanager dar
 type ConnectionManager struct {
 	_lock       *sync.Mutex
 	_connection []*_connection_io_pair
 }
 
+// Fügt eine neue AKtive Verbindung zum Manager hinzu
 func (obj *ConnectionManager) RegisterNewRelayConnection(relay *Relay, conn RelayConnection) error {
 	// Es wird geprüft ob ein Relay vorhanden ist, wenn nicht wird ein Fehler produziert
 	if relay == nil {
@@ -43,6 +46,7 @@ func (obj *ConnectionManager) RegisterNewRelayConnection(relay *Relay, conn Rela
 	return nil
 }
 
+// Entfernt eine Verbindung
 func (obj *ConnectionManager) RemoveRelayConnection(conn RelayConnection) error {
 	// Es werden alle Registrierten Paare nach dieser Verbindung abgesucht
 
@@ -53,6 +57,7 @@ func (obj *ConnectionManager) RemoveRelayConnection(conn RelayConnection) error 
 	return nil
 }
 
+// Gibt an ob der Relay Verbunden ist
 func (obj *ConnectionManager) RelayIsConnected(relay *Relay) bool {
 	for i := range obj._connection {
 		if obj._connection[i]._relay._public_key == relay._public_key {
@@ -62,6 +67,7 @@ func (obj *ConnectionManager) RelayIsConnected(relay *Relay) bool {
 	return false
 }
 
+// Erstellt einen neuen Verbindungs Manager
 func newConnectionManager() ConnectionManager {
 	return ConnectionManager{_connection: make([]*_connection_io_pair, 0), _lock: new(sync.Mutex)}
 }

@@ -247,6 +247,11 @@ func (obj *Kernel) RemoveConnection(relay *Relay, conn RelayConnection) error {
 	return nil
 }
 
+// Signalisiert dass alle bekannten Routen für diese Verbindung Aktiviert werden können
+func (obj *Kernel) LoadAndActiveRoutesByRelay(relay *Relay) error {
+	return nil
+}
+
 // Wird verwendet um Third Party oder Externe Kernel Module zu laden
 func (obj *Kernel) LoadExternalKernelModules() error {
 	files, err := os.ReadDir(obj._external_modules_path)
