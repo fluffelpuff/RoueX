@@ -161,7 +161,7 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 	bandwith_kbs := float64(float64(len(recived_message))/total_ts_time) / 1024
 
 	// Das Finale Sitzungsobjekt wird erstellt
-	finally_kernel_session, err := createFinallyKernelConnection(conn, key_pair_id, public_server_key, public_server_otk, bandwith_kbs, int64(total_ts_time))
+	finally_kernel_session, err := createFinallyKernelConnection(conn, key_pair_id, public_server_key, public_server_otk, bandwith_kbs, uint64(total_ts_time))
 	if err != nil {
 		conn.Close()
 		return err

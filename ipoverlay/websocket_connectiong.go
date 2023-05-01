@@ -18,8 +18,9 @@ type WebsocketKernelConnection struct {
 	_total_reader_threads  uint8
 	_is_finally            bool
 	_signal_shutdown       bool
-	_ping                  []int64
+	_ping                  []uint64
 	_bandwith              []float64
+	_ping_processes        []*PingProcess
 	_conn                  *websocket.Conn
 	_kernel                *kernel.Kernel
 	_dest_relay_public_key *btcec.PublicKey
@@ -47,44 +48,84 @@ func (obj *WebsocketKernelConnection) _loop_bckg_run() bool {
 }
 
 // Wird ausgeführt um eine neue Pingzeit hinzuzufügen
-func (obj *WebsocketKernelConnection) _add_ping_time(time int64) {
+func (obj *WebsocketKernelConnection) _add_ping_time(time uint64) {
 	obj._lock.Lock()
 	obj._ping = append(obj._ping, time)
 	obj._lock.Unlock()
 }
 
 // Wird ausgeführt um eine neuen Ping Vorgang zu Registrieren
-func (obj *WebsocketKernelConnection) _create_new_ping_session() []byte {
-	return nil
+func (obj *WebsocketKernelConnection) _create_new_ping_session() *PingProcess {
+	// Es wird ein neuer Ping Vorgang registriert
+	new_proc, err := newPingProcess()
+	if err != nil {
+		panic(err)
+	}
+
+	// Der Vorgang wird registriert
+	obj._lock.Lock()
+	obj._ping_processes = append(obj._ping_processes, new_proc)
+	obj._lock.Unlock()
+
+	// Die Daten werden zurückgegeben
+	return new_proc
+}
+
+// Wird verwendet um ein Ping abzusenden und auf das Pong zu warten
+func (obj *WebsocketKernelConnection) _send_ping_and_wait_of_pong() (uint64, error) {
+	// Es wird ein neuer Ping vorgang registriert
+	new_ping_session := obj._create_new_ping_session()
+
+	// Das Ping Paket wird erzeugt
+	ping_package, creating_error := new_ping_session.GetPingPackage()
+	if creating_error != nil {
+		panic(creating_error)
+	}
+
+	// Das Paket wird in Bytes umgewandelt
+	package_bytes, err := ping_package.toBytes()
+	if err != nil {
+		panic(err)
+	}
+
+	// Das Paket wird gesendet
+	obj._write_ws_package(package_bytes, Ping)
+
+	// Es wird auf die Antwort des Paketes gewartet
+	r_time, err := new_ping_session.untilWaitOfPong()
+	if err != nil {
+		return 0, err
+	}
+
+	// Der Vorgang wurde ohne Fehler durchgeführt
+	return r_time, nil
 }
 
 // Gibt an ob der Ping Pong test korrekt ist
-func (obj *WebsocketKernelConnection) __ping_pong() error {
-	// Diese Funktion wird als eigentliche Ping Funktion ausgeführt
-	pfnc := func(tobj *WebsocketKernelConnection) error {
-		// Es wird geprüft ob eine Verbindung vorhanden ist
-		if !tobj.IsConnected() {
-			return fmt.Errorf("is disconnected")
+func (obj *WebsocketKernelConnection) __ping_auto_thread_pong() {
+	// Speichert die Zeit ab, wann der Letze Ping durchgeführt wurde
+	last_ping := time.Now()
+
+	// Wird solange ausgeführt, solange die Verbindung verbunden ist
+	for obj.IsConnected() {
+		// Zeitdauer seit last_ping messen
+		elapsed := time.Since(last_ping)
+
+		// Überprüfen, ob 10 Sekunden vergangen sind
+		if elapsed.Seconds() >= 10 {
+			// Es wird ein Ping vorgang durchgeführt
+			w_time, err := obj._send_ping_and_wait_of_pong()
+			if err != nil {
+				break
+			}
+
+			// Die Pingzeit wird abgespeichert
+			obj._add_ping_time(w_time)
+
+			// Speichert die Zeit des Pings ab
+			last_ping = time.Now()
 		}
-
-		// Es wird ein neues Ping Paket registriert
-		ping_id := tobj._create_new_ping_session()
-
-		tobj._add_ping_time(0)
-		return nil
 	}
-
-	// Der erste Ping Vorgang wird durchgeführt, hierbei darf kein Fehler auftreten
-	err := pfnc(obj)
-	if err != nil {
-		return err
-	}
-
-	// Der Thread wird ausgeführt
-	go pfnc(obj)
-
-	// Der Vorgang wurde ohne Fehler fertigstetllt
-	return nil
 }
 
 // Nimmt eintreffende Pakete entgegen
@@ -164,7 +205,7 @@ func (obj *WebsocketKernelConnection) _thread_reader(rewolf chan string) {
 }
 
 // Wird verwendet um ein Paket Abzusenden
-func (obj *WebsocketKernelConnection) _write_ws_package(pack EncryptedTransportPackage, tpe TransportPackageType) error {
+func (obj *WebsocketKernelConnection) _write_ws_package(data []byte, tpe TransportPackageType) error {
 	return nil
 }
 
@@ -199,10 +240,8 @@ func (obj *WebsocketKernelConnection) FinallyInit() error {
 	obj._is_finally = true
 	obj._lock.Unlock()
 
-	// Der Ping Bandwith Thread wird gestartet, es muss mindestens 1 Vorgang erfolgreich durchgeführt werden
-	if err := obj.__ping_pong(); err != nil {
-		return err
-	}
+	// Der Ping Bandwith Thread wird gestartet, dieser ermittelt die Bandbreite sowie den Ping für diese Verbindung
+	go obj.__ping_auto_thread_pong()
 
 	// Der Vorgang wurde ohne einen Fehler durchgeführt
 	log.Println("Finally connection", obj._object_id)
@@ -225,14 +264,14 @@ func (obj *WebsocketKernelConnection) GetObjectId() string {
 }
 
 // Erstellt ein neues Kernel Sitzungs Objekt
-func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id string, relay_public_key *btcec.PublicKey, relay_otk_public_key *btcec.PublicKey, bandwith float64, ping_time int64) (*WebsocketKernelConnection, error) {
+func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id string, relay_public_key *btcec.PublicKey, relay_otk_public_key *btcec.PublicKey, bandwith float64, ping_time uint64) (*WebsocketKernelConnection, error) {
 	wkcobj := &WebsocketKernelConnection{
 		_object_id:             kernel.RandStringRunes(12),
 		_local_otk_key_pair:    local_otk_key_pair_id,
 		_dest_relay_public_key: relay_public_key,
 		_lock:                  new(sync.Mutex),
 		_signal_shutdown:       false,
-		_ping:                  []int64{ping_time},
+		_ping:                  []uint64{ping_time},
 		_bandwith:              []float64{bandwith},
 		_conn:                  conn,
 	}

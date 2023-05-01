@@ -18,3 +18,14 @@ type EncryptedServerHelloPackage struct {
 
 type EncryptedTransportPackage struct {
 }
+
+func (obj *EncryptedTransportPackage) toBytes() ([]byte, error) {
+	return nil, nil
+}
+
+type PingPackage struct {
+}
+
+func (obj *PingPackage) toBytes() ([]byte, error) {
+	return nil, nil
+}

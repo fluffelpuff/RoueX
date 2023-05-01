@@ -220,7 +220,7 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	bandwith_kbs := float64(float64(len(message))/total_ts_time) / 1024
 
 	// Das Verbindungsobjekt wird erstellt
-	conn_obj, err := createFinallyKernelConnection(conn, key_pair_id, pub_client_key, pub_client_otk_key, bandwith_kbs, int64(total_ts_time))
+	conn_obj, err := createFinallyKernelConnection(conn, key_pair_id, pub_client_key, pub_client_otk_key, bandwith_kbs, uint64(total_ts_time))
 	if err != nil {
 		conn.Close()
 		log.Println("error: ", err.Error())
