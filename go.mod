@@ -23,6 +23,7 @@ require (
 require (
 	github.com/99designs/keyring v1.2.2
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
+	github.com/cyberdelia/lzo v1.0.0
 	github.com/dustinxie/ecc v0.0.0-20210511000915-959544187564
 	github.com/ecies/go/v2 v2.0.6
 	github.com/ethereum/go-ethereum v1.11.6

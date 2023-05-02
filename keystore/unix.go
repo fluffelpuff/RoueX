@@ -11,11 +11,40 @@ import (
 	"github.com/fluffelpuff/RoueX/static"
 )
 
+func createNewPrivateKe() (*btcec.PublicKey, *btcec.PrivateKey, error) {
+	// Es wird ein neuer Privater Schlüssel erstellt
+	pr, err := btcec.NewPrivateKey()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Der Private Schlüssel wird in Hex umgewadelt
+	hexed_priv_key := hex.EncodeToString(pr.Serialize())
+
+	// Der Private Schlüssel wird geschrieben
+	file, err := os.Create(static.GetFilePathFor(static.PRIVATE_KEY_FILE))
+	if err != nil {
+		return nil, nil, err
+	}
+	_, err = file.WriteString(hexed_priv_key)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Die Datei wird geschlossen
+	file.Close()
+
+	// Der Öffentliche und Private Schlüssel wird zurückgeben
+	fmt.Println("New Private key created to file", static.GetFilePathFor(static.PRIVATE_KEY_FILE))
+	return pr.PubKey(), pr, nil
+}
+
 func LoadPrivateKeyFromKeyStore() (*btcec.PublicKey, *btcec.PrivateKey, error) {
 	// Es wird geprüft ob die Datei vorhanden ist
 	fileinfo, err := os.Stat(static.GetFilePathFor(static.PRIVATE_KEY_FILE))
 	if os.IsNotExist(err) {
-		return nil, nil, err
+		// Es wird ein neuer Privater und öffentlicher Schlüssel erstellt
+		return createNewPrivateKe()
 	}
 
 	// Überprüfen, ob der aktuelle Benutzer die Datei lesen darf
@@ -52,6 +81,6 @@ func LoadPrivateKeyFromKeyStore() (*btcec.PublicKey, *btcec.PrivateKey, error) {
 	privk, pubk := btcec.PrivKeyFromBytes(decoded)
 
 	// Der Private Schlüssel wird zurückgegeben
-	fmt.Println("Privatekey loaded from ", static.GetFilePathFor(static.PRIVATE_KEY_FILE))
+	fmt.Println("Private key loaded from", static.GetFilePathFor(static.PRIVATE_KEY_FILE))
 	return pubk, privk, nil
 }

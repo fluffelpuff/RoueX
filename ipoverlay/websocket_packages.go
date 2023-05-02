@@ -1,5 +1,9 @@
 package ipoverlay
 
+import (
+	"github.com/fxamacker/cbor"
+)
+
 type EncryptedClientHelloPackage struct {
 	PublicServerKey   []byte `cbor:"1,keyasint"`
 	PublicClientKey   []byte `cbor:"2,keyasint"`
@@ -17,15 +21,89 @@ type EncryptedServerHelloPackage struct {
 }
 
 type EncryptedTransportPackage struct {
+	SourceRelay      []byte               `cbor:"1,keyasint"`
+	DestinationRelay []byte               `cbor:"2,keyasint"`
+	Type             TransportPackageType `cbor:"3,keyasint"`
+	Data             []byte               `cbor:"4,keyasint"`
 }
 
 func (obj *EncryptedTransportPackage) toBytes() ([]byte, error) {
-	return nil, nil
+	data, err := cbor.Marshal(obj, cbor.EncOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func readEncryptedTransportPackageFromBytes(d_bytes []byte) (*EncryptedTransportPackage, error) {
+	var v EncryptedTransportPackage
+	if err := cbor.Unmarshal(d_bytes, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+type WSTransportPaket struct {
+	Signature []byte `cbor:"1,keyasint"`
+	Body      []byte `cbor:"2,keyasint"`
+}
+
+func (obj *WSTransportPaket) toBytes() ([]byte, error) {
+	data, err := cbor.Marshal(obj, cbor.EncOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (obj *WSTransportPaket) PreValidate() bool {
+	return false
+}
+
+func readWSTransportPaketFromBytes(d_bytes []byte) (*WSTransportPaket, error) {
+	var v WSTransportPaket
+	if err := cbor.Unmarshal(d_bytes, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
 }
 
 type PingPackage struct {
+	PingId []byte `cbor:"1,keyasint"`
 }
 
 func (obj *PingPackage) toBytes() ([]byte, error) {
-	return nil, nil
+	data, err := cbor.Marshal(obj, cbor.EncOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func readPingPackageFromBytes(d_bytes []byte) (*PingPackage, error) {
+	var v PingPackage
+	if err := cbor.Unmarshal(d_bytes, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+type PongPackage struct {
+	PingId []byte `cbor:"1,keyasint"`
+}
+
+func (obj *PongPackage) toBytes() ([]byte, error) {
+	data, err := cbor.Marshal(obj, cbor.EncOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func readPongPackageFromBytes(d_bytes []byte) (*PongPackage, error) {
+	var v PongPackage
+	if err := cbor.Unmarshal(d_bytes, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
 }

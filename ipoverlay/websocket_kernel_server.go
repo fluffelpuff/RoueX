@@ -205,6 +205,14 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 		relay_pkyobj = kernel.NewUntrustedRelay(pub_client_key, c_time, r.Host, "ws")
 	}
 
+	// Es wird ein ECDH Schlüssel für die OTK Schlüssel beider Relays erstellt
+	otk_ecdh_key, err := obj._kernel.CreateOTKECDHKey(key_pair_id, pub_client_otk_key)
+	if err != nil {
+		fmt.Println(err)
+		conn.Close()
+		return
+	}
+
 	// Die Daten werden übermittelt
 	send_err := conn.WriteMessage(websocket.BinaryMessage, encrypted_package)
 	if send_err != nil {
@@ -220,7 +228,7 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	bandwith_kbs := float64(float64(len(message))/total_ts_time) / 1024
 
 	// Das Verbindungsobjekt wird erstellt
-	conn_obj, err := createFinallyKernelConnection(conn, key_pair_id, pub_client_key, pub_client_otk_key, bandwith_kbs, uint64(total_ts_time))
+	conn_obj, err := createFinallyKernelConnection(conn, key_pair_id, pub_client_key, pub_client_otk_key, otk_ecdh_key, bandwith_kbs, uint64(total_ts_time))
 	if err != nil {
 		conn.Close()
 		log.Println("error: ", err.Error())

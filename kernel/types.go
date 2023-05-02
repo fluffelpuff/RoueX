@@ -38,3 +38,17 @@ type RelayConnection interface {
 type ExternalModule interface {
 	Info() error
 }
+
+// Überträgt Verschlüsselte Daten
+type _aes_encrypted_result struct {
+	Cipher []byte `cbor:"1,keyasint"`
+	Nonce  []byte `cbor:"2,keyasint"`
+	Sig    []byte `cbor:"3,keyasint"`
+}
+
+// Gibt den Verschlüsselungs Algo an
+type EncryptionAlgo uint8
+
+const (
+	CHACHA_2020 = EncryptionAlgo(1)
+)

@@ -3,6 +3,8 @@ package ipoverlay
 import (
 	"crypto/rand"
 	"time"
+
+	"github.com/fluffelpuff/RoueX/kernel"
 )
 
 type PingResult struct {
@@ -11,6 +13,7 @@ type PingResult struct {
 }
 
 type PingProcess struct {
+	ObjectId      string
 	ProcessId     []byte
 	CreatedAt     time.Time
 	ResultChannel chan PingResult
@@ -30,5 +33,5 @@ func newPingProcess() (*PingProcess, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PingProcess{ProcessId: randomBytes, ResultChannel: make(chan PingResult), CreatedAt: time.Now()}, nil
+	return &PingProcess{ProcessId: randomBytes, ResultChannel: make(chan PingResult), CreatedAt: time.Now(), ObjectId: kernel.RandStringRunes(16)}, nil
 }

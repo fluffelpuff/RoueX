@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -32,6 +33,7 @@ type Kernel struct {
 	_firewall              *Firewall
 	_private_key           *btcec.PrivateKey
 	_temp_key_pairs        map[string]*btcec.PrivateKey
+	_temp_ecdh_keys        map[string][]byte
 }
 
 // Erstellt einen OSX Kernel
@@ -85,6 +87,7 @@ func CreateOSXKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 		_private_key:           priv_key,
 		_lock:                  new(sync.Mutex),
 		_temp_key_pairs:        make(map[string]*secp256k1.PrivateKey),
+		_temp_ecdh_keys:        make(map[string][]byte),
 		_socket_path:           static.GetFilePathFor(static.API_SOCKET),
 		_routing_table:         &routing_table_obj,
 		_firewall:              firewall_table_obj,
@@ -363,7 +366,7 @@ func (obj *Kernel) GetPublicTempKeyById(temp_key_id string) (*btcec.PublicKey, e
 	priv_key, ok := obj._temp_key_pairs[temp_key_id]
 	if !ok {
 		obj._lock.Unlock()
-		return nil, fmt.Errorf("not found")
+		return nil, fmt.Errorf(fmt.Sprint("not found a", temp_key_id))
 	}
 	obj._lock.Unlock()
 	return priv_key.PubKey(), nil
@@ -380,10 +383,81 @@ func (obj *Kernel) SignWithTempKeyId(temp_key_id string, digest []byte) ([]byte,
 	priv_key, ok := obj._temp_key_pairs[temp_key_id]
 	if !ok {
 		obj._lock.Unlock()
-		return nil, fmt.Errorf("not found")
+		return nil, fmt.Errorf(fmt.Sprint("not found b", temp_key_id))
 	}
 	obj._lock.Unlock()
 	return Sign(priv_key, digest)
+}
+
+// Erstellt einen OTK ECDH Schlüssel aus einem Öffentlichen Schlüssel und der OTK-ID
+func (obj *Kernel) CreateOTKECDHKey(otk_id string, dest_pkey *btcec.PublicKey) (string, error) {
+	obj._lock.Lock()
+	priv_key, ok := obj._temp_key_pairs[otk_id]
+	if !ok {
+		obj._lock.Unlock()
+		return "", fmt.Errorf(fmt.Sprint("not found c", otk_id))
+	}
+
+	shared_secret := btcec.GenerateSharedSecret(priv_key, dest_pkey)
+
+	found_id := ""
+	for key := range obj._temp_ecdh_keys {
+		if bytes.Equal(obj._temp_ecdh_keys[key], shared_secret) {
+			found_id = key
+			break
+		}
+	}
+	if len(found_id) > 0 {
+		obj._lock.Unlock()
+		return found_id, nil
+	}
+
+	rand_id := RandStringRunes(12)
+	obj._temp_ecdh_keys[rand_id] = shared_secret
+	obj._lock.Unlock()
+
+	log.Println("New ECDH Key computed", rand_id, hex.EncodeToString(shared_secret))
+	return rand_id, nil
+}
+
+// Verschlüsselt einen Datensatz mit dem OTK ECDH Schlüssel
+func (obj *Kernel) EncryptOTKECDHById(algo EncryptionAlgo, otk_id string, data []byte) ([]byte, error) {
+	obj._lock.Lock()
+	ecdh_key, ok := obj._temp_ecdh_keys[otk_id]
+	if !ok {
+		obj._lock.Unlock()
+		return nil, fmt.Errorf(fmt.Sprint("not found d", otk_id))
+	}
+	obj._lock.Unlock()
+
+	switch algo {
+	case CHACHA_2020:
+		r, e := EncryptWithChaCha(ecdh_key, data)
+		log.Println("Encrypting data with aes256", otk_id, "session otk ecdh key")
+		return r, e
+	default:
+		return nil, fmt.Errorf("unkown algo")
+	}
+}
+
+// Entschlüsselt einen Datensatz mit dem OTK ECDH Schlüssel
+func (obj *Kernel) DecryptOTKECDHById(algo EncryptionAlgo, otk_id string, data []byte) ([]byte, error) {
+	obj._lock.Lock()
+	ecdh_key, ok := obj._temp_ecdh_keys[otk_id]
+	if !ok {
+		obj._lock.Unlock()
+		return nil, fmt.Errorf(fmt.Sprint("not found d", otk_id))
+	}
+	obj._lock.Unlock()
+
+	switch algo {
+	case CHACHA_2020:
+		r, e := DecryptWithChaCha(ecdh_key, data)
+		log.Println("Decrypting data with aes256", otk_id, "session otk ecdh key")
+		return r, e
+	default:
+		return nil, fmt.Errorf("unkown algo")
+	}
 }
 
 // Wird verwendet um einen Verschlüsselten Datensatz mit dem Privaten Relay Schlüssel zu enschlüsseln

@@ -1,11 +1,18 @@
 package kernel
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"errors"
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	ecies "github.com/ecies/go/v2"
+	"github.com/fxamacker/cbor"
+	"golang.org/x/crypto/chacha20"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -84,4 +91,79 @@ func VerifyByBytes(public_key *btcec.PublicKey, sig []byte, digest []byte) (bool
 		return false, nil
 	}
 	return true, nil
+}
+
+// Erstellt eine Checksume mit einem ECDH Schlüssel
+func ComputeChecksumECDH(ecdh_key []byte, data []byte) ([]byte, error) {
+	// Erstelle einen SHA-256-Hasher
+	hasher := hmac.New(sha256.New, ecdh_key)
+
+	// Schreibe die Nachricht in den Hasher
+	hasher.Write(data)
+
+	// Berechne die HMAC
+	hmacBytes := hasher.Sum(nil)
+
+	// Die Daten werden zurückgegeben
+	return hmacBytes, nil
+}
+
+// Verschlüsselt etwas mit AES 256
+func EncryptWithChaCha(ecdh_key []byte, data []byte) ([]byte, error) {
+	nonce := make([]byte, chacha20.NonceSize)
+	if _, err := rand.Read(nonce); err != nil {
+		panic(err)
+	}
+
+	cipher, err := chacha20.NewUnauthenticatedCipher(ecdh_key, nonce)
+	if err != nil {
+		panic(err)
+	}
+
+	ciphertext := make([]byte, len(data))
+	cipher.XORKeyStream(ciphertext, data)
+
+	chsum, err := ComputeChecksumECDH(ecdh_key, ciphertext)
+	if err != nil {
+		return nil, err
+	}
+
+	aes_paket := _aes_encrypted_result{Cipher: ciphertext, Sig: chsum, Nonce: nonce}
+
+	m_data, err := cbor.Marshal(aes_paket, cbor.EncOptions{})
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+
+	return m_data, nil
+}
+
+// Verschlüsselt etwas mit AES 256
+func DecryptWithChaCha(ecdh_key []byte, data []byte) ([]byte, error) {
+	// Erstelle einen CBOR-Decoder
+	var aes_paket _aes_encrypted_result
+	if err := cbor.Unmarshal(data, &aes_paket); err != nil {
+		return nil, err
+	}
+
+	// Überprüfe die Checksumme
+	chsum, err := ComputeChecksumECDH(ecdh_key, aes_paket.Cipher)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(chsum, aes_paket.Sig) {
+		return nil, errors.New("checksum validation failed")
+	}
+
+	// Decryption
+	cipherDecryption, err := chacha20.NewUnauthenticatedCipher(ecdh_key, aes_paket.Nonce)
+	if err != nil {
+		return nil, err
+	}
+
+	decrypted := make([]byte, len(aes_paket.Cipher))
+	cipherDecryption.XORKeyStream(decrypted, aes_paket.Cipher)
+
+	// Die Daten werden ohne Fehler zurückgegeben
+	return decrypted, nil
 }

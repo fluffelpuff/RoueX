@@ -154,6 +154,12 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 		return err
 	}
 
+	// Es wird ein ECDH Schlüssel für die OTK Schlüssel beider Relays erstellt
+	otk_ecdh_key, err := obj._kernel.CreateOTKECDHKey(key_pair_id, public_server_otk)
+	if err != nil {
+		return err
+	}
+
 	// Zeitdifferenz berechnen
 	total_ts_time := time.Until(c_time).Seconds()
 
@@ -161,7 +167,7 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 	bandwith_kbs := float64(float64(len(recived_message))/total_ts_time) / 1024
 
 	// Das Finale Sitzungsobjekt wird erstellt
-	finally_kernel_session, err := createFinallyKernelConnection(conn, key_pair_id, public_server_key, public_server_otk, bandwith_kbs, uint64(total_ts_time))
+	finally_kernel_session, err := createFinallyKernelConnection(conn, key_pair_id, public_server_key, public_server_otk, otk_ecdh_key, bandwith_kbs, uint64(total_ts_time))
 	if err != nil {
 		conn.Close()
 		return err
