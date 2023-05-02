@@ -7,22 +7,6 @@ import (
 	"sync"
 )
 
-// Stellt eine Verbindungspaar dar
-type _connection_io_pair struct {
-	_relay *Relay
-	_conn  []RelayConnection
-}
-
-// Diese Funktion gibt an ob es eine Aktive verbindung für diesen Relay gibt
-func (obj *_connection_io_pair) HasActiveConnections() bool {
-	return false
-}
-
-// Diese Funktion gibt an ob für diese Relay Verbindung bereits die Routen Initalisiert wurden
-func (obj *_connection_io_pair) RoutestInited() bool {
-	return false
-}
-
 // Stellt den Verbindungsmanager dar
 type ConnectionManager struct {
 	_lock       *sync.Mutex
@@ -42,15 +26,25 @@ func (obj *ConnectionManager) RegisterNewRelayConnection(relay *Relay, conn Rela
 	// Es wird geprüft ob es bereits ein Relay mit diesem Öffentlichen Schlüssel gibt
 	for i := range obj._connection {
 		if bytes.Equal(obj._connection[i]._relay._public_key.SerializeCompressed(), relay._public_key.SerializeCompressed()) {
-			// Die Verbindung wird dem Relay zugeordnet
-			log.Println("Relay connection added", relay.GetPublicKeyHexString())
-			obj._connection[i]._conn = append(obj._connection[i]._conn, conn)
+			log.Println("ConnectionManager: relay connection added. relay =", relay._hexed_id, "connection =", conn.GetObjectId())
+			obj._connection[i].add_connection(conn)
+			obj._lock.Unlock()
 			return nil
 		}
 	}
 
+	// Es wird eine neuer RelayIO erstellt
+	relay_io_object := createNewConnectionIoPair(relay)
+
+	// Dem Relay wird eine Verbindung zugeordnet
+	err := relay_io_object.add_connection(conn)
+	if err != nil {
+		obj._lock.Unlock()
+		return fmt.Errorf("ConnectionManager:RegisterNewRelayConnection: " + err.Error())
+	}
+
 	// Es wurde kein Relay gefunden, es wird ein neuer Haupteintrag erzeugt
-	obj._connection = append(obj._connection, &_connection_io_pair{_relay: relay, _conn: []RelayConnection{conn}})
+	obj._connection = append(obj._connection, relay_io_object)
 
 	// Der Thradlock wird freigegeben
 	obj._lock.Unlock()
@@ -73,11 +67,21 @@ func (obj *ConnectionManager) RemoveRelayConnection(conn RelayConnection) error 
 
 // Gibt an ob der Relay Verbunden ist
 func (obj *ConnectionManager) RelayIsConnected(relay *Relay) bool {
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+
+	// Es wird geprüft ob es eine Aktive Verbindung für das Relay gibt
 	for i := range obj._connection {
-		if obj._connection[i]._relay._public_key == relay._public_key {
+		if obj._connection[i]._relay._hexed_id == relay._hexed_id {
+			obj._lock.Unlock()
 			return true
 		}
 	}
+
+	// Der Threadlock wird freigegben
+	obj._lock.Unlock()
+
+	// Es wurde keine Aktive Realy Verbinding gefunden
 	return false
 }
 
@@ -100,10 +104,13 @@ func (obj *ConnectionManager) GetRelayByConnection(conn RelayConnection) (*Relay
 				break
 			}
 		}
+		if frelay != nil {
+			break
+		}
 	}
 
 	// Sollte kein Relay gefunden wurden sein, wird der Vorgang abgebrochen
-	if frelay != nil {
+	if frelay == nil {
 		obj._lock.Unlock()
 		return nil, false, nil
 	}
@@ -112,7 +119,7 @@ func (obj *ConnectionManager) GetRelayByConnection(conn RelayConnection) (*Relay
 	obj._lock.Unlock()
 
 	// Der Vorgang wurde ohne fehler abgeschlossen
-	return nil, true, nil
+	return frelay, true, nil
 }
 
 // Gibt an ob für diesen Relay bereits die Routen Initalisiert wurden und ob eine Aktive Verbidndung für den Relay vorhanden ist
@@ -147,6 +154,30 @@ func (obj *ConnectionManager) RelayAvailAndRoutesInited(relay *Relay) (bool, boo
 
 // Wird verwendet um alle Aktiven Routen für ein Relay zu Initalisieren
 func (obj *ConnectionManager) InitRoutesForRelay(relay *Relay, routes []*RouteEntry) error {
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+
+	// Das Relay wird herausgesucht
+	for i := range obj._connection {
+		if obj._connection[i]._relay._hexed_id == relay._hexed_id {
+			// Es wird geprüft ob es eine Aktive verbindung für dieses Relay gibt
+			if !obj._connection[i].HasActiveConnections() {
+				obj._lock.Unlock()
+				return fmt.Errorf("ConnectionManager: relay has no active connections. relay = " + relay.GetHexId())
+			}
+
+			// Es wird geprüft ob die Routen bereits initalisiert wurden
+			if obj._connection[i].RoutestInited() {
+				obj._lock.Unlock()
+				return nil
+			}
+		}
+	}
+
+	// Der Threadlock wird freigeben
+	obj._lock.Unlock()
+
+	// Das Relay wird herausgesucht
 	return nil
 }
 
