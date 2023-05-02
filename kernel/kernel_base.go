@@ -250,11 +250,6 @@ func (obj *Kernel) RemoveConnection(relay *Relay, conn RelayConnection) error {
 	return nil
 }
 
-// Signalisiert dass alle bekannten Routen für diese Verbindung Aktiviert werden können
-func (obj *Kernel) LoadAndActiveRoutesByRelay(relay *Relay) error {
-	return nil
-}
-
 // Wird verwendet um Third Party oder Externe Kernel Module zu laden
 func (obj *Kernel) LoadExternalKernelModules() error {
 	files, err := os.ReadDir(obj._external_modules_path)
@@ -416,7 +411,7 @@ func (obj *Kernel) CreateOTKECDHKey(otk_id string, dest_pkey *btcec.PublicKey) (
 	obj._temp_ecdh_keys[rand_id] = shared_secret
 	obj._lock.Unlock()
 
-	log.Println("New ECDH Key computed", rand_id, hex.EncodeToString(shared_secret))
+	log.Println("Kernel: new ecdh key computed. otk_id =", rand_id, " dh_hash =", hex.EncodeToString(ComputeSha3256Hash(shared_secret)))
 	return rand_id, nil
 }
 
@@ -433,7 +428,7 @@ func (obj *Kernel) EncryptOTKECDHById(algo EncryptionAlgo, otk_id string, data [
 	switch algo {
 	case CHACHA_2020:
 		r, e := EncryptWithChaCha(ecdh_key, data)
-		log.Println("Encrypting data with aes256", otk_id, "session otk ecdh key")
+		log.Println("Kernel: encrypting data with chacha20. otk_id =", otk_id, "data_size =", len(data))
 		return r, e
 	default:
 		return nil, fmt.Errorf("unkown algo")
@@ -453,7 +448,7 @@ func (obj *Kernel) DecryptOTKECDHById(algo EncryptionAlgo, otk_id string, data [
 	switch algo {
 	case CHACHA_2020:
 		r, e := DecryptWithChaCha(ecdh_key, data)
-		log.Println("Decrypting data with aes256", otk_id, "session otk ecdh key")
+		log.Println("Kernel: decrypting data with chacha20, otk_id =", otk_id, "data_size =", len(data))
 		return r, e
 	default:
 		return nil, fmt.Errorf("unkown algo")
@@ -462,5 +457,89 @@ func (obj *Kernel) DecryptOTKECDHById(algo EncryptionAlgo, otk_id string, data [
 
 // Wird verwendet um einen Verschlüsselten Datensatz mit dem Privaten Relay Schlüssel zu enschlüsseln
 func (obj *Kernel) DecryptWithPrivateRelayKey(cipher_data []byte) ([]byte, error) {
+	log.Println("Kernel: decrypting data with relay key. algo = chacha20, data_size =", len(cipher_data))
 	return DecryptDataWithPrivateKey(obj._private_key, cipher_data)
+}
+
+// Wird verwendet um die Routen für ein Relay zu Laden
+func (obj *Kernel) DumpsRoutesForRelayByConnection(conn RelayConnection) (bool, bool) {
+	// Es wird versucht das Relay anhand der Verbindung aus dem Verbindungsmanager abzurufen
+	relay, found, err := obj._connection_manager.GetRelayByConnection(conn)
+	if err != nil {
+		log.Println("Kernel: error by dumping routes for relays. error =", err.Error(), "connection =", conn.GetObjectId())
+		return false, false
+	}
+
+	// Sollte kein Relay vorhanden sein, wird der Vorgang abgebrochen
+	if !found {
+		log.Println("Kernel: no relay for connection found. connection =", conn.GetObjectId())
+	}
+
+	// Es wird geprüft ob die Routen bereits Initalisiert wurden
+	relay_active, routes_inited := obj._connection_manager.RelayAvailAndRoutesInited(relay)
+	if !relay_active {
+		if !conn.IsConnected() {
+			log.Println("Kernel: error by dumping routes for relays, conenction was closed.", "connection =", conn.GetObjectId(), "relay =", relay.GetHexId())
+			return false, false
+		}
+	}
+
+	// Sollten die Routen bereits Initalisiert wurden sein, wird der vorgang abgebrochen
+	if routes_inited {
+		log.Println("Kernel: error by dumping routes for relays, routes always inited.", "connection =", conn.GetObjectId(), "relay =", relay.GetHexId())
+		return true, false
+	}
+
+	// Es wird geprüft ob die Verbindung noch besteht, wenn nicht wird der Vorgang abgebrochen
+	if !conn.IsConnected() {
+		log.Println("Kernel: error by dumping routes for relays, conenction was closed.", "connection =", conn.GetObjectId(), "relay =", relay.GetHexId())
+		return false, false
+	}
+
+	// Es werden alle Routen für diesen Relay aus der Routing Datenbank abgerufen
+	routing_endpoints, err := obj._routing_table.FetchRoutesByRelay(relay)
+	if err != nil {
+		log.Println("Kernel: error by dumping routes for relays. error =", err.Error(), "connection =", conn.GetObjectId(), "relay =", relay.GetHexId())
+		return false, false
+	}
+
+	// Es wird geprüft ob die Verbindung noch besteht, wenn nicht wird der Vorgang abgebrochen
+	if !conn.IsConnected() {
+		log.Println("Kernel: error by dumping routes for relays, conenction was closed.", "connection =", conn.GetObjectId(), "relay =", relay.GetHexId())
+		return false, false
+	}
+
+	// Es wird wirderholt geprüft ob die Routen für diese Verbindungen bereits Initalisiert wurden
+	relay_active, routes_inited = obj._connection_manager.RelayAvailAndRoutesInited(relay)
+	if !relay_active {
+		if !conn.IsConnected() {
+			log.Println("Kernel: error by dumping routes for relays, conenction was closed.", "connection =", conn.GetObjectId(), "relay =", relay.GetHexId())
+			return false, false
+		}
+	}
+
+	// Sollten die Routen bereits Initalisiert wurden sein, wird der vorgang abgebrochen
+	if routes_inited {
+		log.Println("Kernel: error by dumping routes for relays, routes always inited.", "connection =", conn.GetObjectId(), "relay =", relay.GetHexId())
+		return true, false
+	}
+
+	// Die Routen werden initalisiert
+	if err := obj._connection_manager.InitRoutesForRelay(relay, routing_endpoints); err != nil {
+		if conn.IsConnected() {
+			log.Println("Kernel: error by dumping routes for relays. error =", err.Error(), "connection =", conn.GetObjectId(), "relay =", relay.GetHexId())
+		} else {
+			log.Println("Kernel: error by dumping routes for relays, conenction was closed.", "connection =", conn.GetObjectId(), "relay =", relay.GetHexId())
+		}
+		return false, false
+	}
+
+	// Log
+	if len(routing_endpoints) > 0 {
+		log.Println("Kernel: dumping relay routes.", "connection =", conn.GetObjectId(), "relay =", relay.GetHexId(), "total =", len(routing_endpoints))
+		return true, true
+	} else {
+		log.Println("Kernel: dumping relay routes, no routes found.", "connection =", conn.GetObjectId(), "relay =", relay.GetHexId())
+		return true, false
+	}
 }

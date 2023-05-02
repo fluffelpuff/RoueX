@@ -23,10 +23,14 @@ type RoutingTable struct {
 }
 
 func (obj *RoutingTable) Shutdown() {
-	log.Println("Shutingdown Routing table database")
+	log.Println("RoutingTable: shutingdown routing table manager...")
 	obj._lock.Lock()
 	obj._db.Close()
 	obj._lock.Unlock()
+}
+
+func (obj *RoutingTable) FetchRoutesByRelay(relay *Relay) ([]*RouteEntry, error) {
+	return []*RouteEntry{}, nil
 }
 
 func loadRoutingTable(path string) (RoutingTable, error) {

@@ -247,14 +247,6 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 		obj._kernel.RemoveConnection(relay_pkyobj, conn_obj)
 		conn.Close()
 	}
-
-	// Die bekannten Routen für diese Verbindung (Relay) werden abgerufen
-	if err := obj._kernel.LoadAndActiveRoutesByRelay(relay_pkyobj); err != nil {
-		obj._kernel.RemoveConnection(relay_pkyobj, conn_obj)
-		log.Println("error:", err.Error())
-		conn.Close()
-		return
-	}
 }
 
 // Erstellt einen neuen Lokalen Websocket Server

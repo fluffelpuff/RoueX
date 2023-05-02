@@ -195,13 +195,6 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 		return err
 	}
 
-	// Die bekannten Routen für diese Verbindung (Relay) werden abgerufen
-	if err := obj._kernel.LoadAndActiveRoutesByRelay(relay_pkyobj); err != nil {
-		obj._kernel.RemoveConnection(relay_pkyobj, finally_kernel_session)
-		conn.Close()
-		return err
-	}
-
 	// Der Gegenseite wird nun der eigene Öffentliche Schlüssel, die Aktuelle Uhrzeit sowie
 	return nil
 }
