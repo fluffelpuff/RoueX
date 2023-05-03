@@ -2,6 +2,7 @@ package static
 
 // Speichert alle unter OSX Verfügabren Pfade ab
 const (
+	// OSX Dateipfade
 	OSX_BASE_CONFIG_PATH       = "/Users/fluffelbuff/Desktop/rouex.config"
 	OSX_NO_ROOT_API_SOCKET     = "/Users/fluffelbuff/Desktop/rouex.socket"
 	OSX_TRUSTED_RELAYS_PATH    = "/Users/fluffelbuff/Desktop/trusted_relays.table"

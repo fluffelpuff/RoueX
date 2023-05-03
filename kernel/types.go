@@ -15,12 +15,17 @@ type ServerModule interface {
 type ClientModuleMetaData struct {
 }
 
+// Stellt Proxy Einstellung dar
+type ProxyConfig struct {
+	Host string
+}
+
 // Stellt ein Client Modul dar
 type ClientModule interface {
 	GetObjectId() string
 	RegisterKernel(kernel *Kernel) error
 	GetMetaDataInfo() ClientModuleMetaData
-	ConnectTo(string, *btcec.PublicKey) error
+	ConnectTo(string, *btcec.PublicKey, *ProxyConfig) error
 	GetProtocol() string
 	Shutdown()
 }
@@ -28,6 +33,7 @@ type ClientModule interface {
 // Stellt eine Verbindung dar
 type RelayConnection interface {
 	RegisterKernel(kernel *Kernel) error
+	GetProtocol() string
 	GetObjectId() string
 	FinallyInit() error
 	Write([]byte) error

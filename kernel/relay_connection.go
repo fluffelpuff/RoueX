@@ -10,7 +10,7 @@ import (
 // Stellt den Verbindungsmanager dar
 type ConnectionManager struct {
 	_lock       *sync.Mutex
-	_connection []*_connection_io_pair
+	_connection []*connection_io_pair
 }
 
 // Fügt eine neue AKtive Verbindung zum Manager hinzu
@@ -160,6 +160,9 @@ func (obj *ConnectionManager) InitRoutesForRelay(relay *Relay, routes []*RouteEn
 	// Das Relay wird herausgesucht
 	for i := range obj._connection {
 		if obj._connection[i]._relay._hexed_id == relay._hexed_id {
+			// Log
+			log.Println("ConnectionManager: try initing routes for relay. relay =", relay._hexed_id)
+
 			// Es wird geprüft ob es eine Aktive verbindung für dieses Relay gibt
 			if !obj._connection[i].HasActiveConnections() {
 				obj._lock.Unlock()
@@ -168,9 +171,26 @@ func (obj *ConnectionManager) InitRoutesForRelay(relay *Relay, routes []*RouteEn
 
 			// Es wird geprüft ob die Routen bereits initalisiert wurden
 			if obj._connection[i].RoutestInited() {
+				log.Println("ConnectionManager: relay always inited =", relay._hexed_id)
 				obj._lock.Unlock()
 				return nil
 			}
+
+			// Das Relay wird aktiviert
+			if err := obj._connection[i]._signal_activated(); err != nil {
+				obj._lock.Unlock()
+				return fmt.Errorf("InitRoutesForRelay: 1:" + err.Error())
+			}
+
+			// Die Routen werden dem Relay zugeordnet
+			if err := obj._connection[i]._add_route_entrys(routes); err != nil {
+				obj._lock.Unlock()
+				return fmt.Errorf("InitRoutesForRelay: 2: " + err.Error())
+			}
+
+			// Die Routen würd das Relay wurden erfolgreich bereitgestellt
+			obj._lock.Unlock()
+			return nil
 		}
 	}
 
@@ -178,10 +198,10 @@ func (obj *ConnectionManager) InitRoutesForRelay(relay *Relay, routes []*RouteEn
 	obj._lock.Unlock()
 
 	// Das Relay wird herausgesucht
-	return nil
+	return fmt.Errorf("ConnectionManager: InitRoutesForRelay: no relay found")
 }
 
 // Erstellt einen neuen Verbindungs Manager
 func newConnectionManager() ConnectionManager {
-	return ConnectionManager{_connection: make([]*_connection_io_pair, 0), _lock: new(sync.Mutex)}
+	return ConnectionManager{_connection: make([]*connection_io_pair, 0), _lock: new(sync.Mutex)}
 }

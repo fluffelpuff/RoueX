@@ -192,7 +192,7 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	}
 
 	// Es wird geprüft ob es sich um einen bekannten Relay handelt
-	relay_pkyobj, err := obj._kernel.GetTrustedRelayByPublicKey(pub_client_key)
+	relay_obj, err := obj._kernel.GetTrustedRelayByPublicKey(pub_client_key)
 	if err != nil {
 		fmt.Println(err)
 		conn.Close()
@@ -200,9 +200,9 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	}
 
 	// Solte kein Vertrauenswürdiger Relay vorhanden sein, wird ein Temporärer Relay erzeugt
-	if relay_pkyobj == nil {
+	if relay_obj == nil {
 		c_time := time.Now().Unix()
-		relay_pkyobj = kernel.NewUntrustedRelay(pub_client_key, c_time, r.Host, "ws")
+		relay_obj = kernel.NewUntrustedRelay(pub_client_key, c_time, r.Host, "ws")
 	}
 
 	// Es wird ein ECDH Schlüssel für die OTK Schlüssel beider Relays erstellt
@@ -236,7 +236,7 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	}
 
 	// Die Verbindung wird registriert
-	if err := obj._kernel.AddNewConnection(relay_pkyobj, conn_obj); err != nil {
+	if err := obj._kernel.AddNewConnection(relay_obj, conn_obj); err != nil {
 		fmt.Println(err)
 		conn.Close()
 		return
@@ -244,7 +244,7 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 
 	// Die Verbindung wird final fertigestellt
 	if err := conn_obj.FinallyInit(); err != nil {
-		obj._kernel.RemoveConnection(relay_pkyobj, conn_obj)
+		obj._kernel.RemoveConnection(conn_obj)
 		conn.Close()
 	}
 }

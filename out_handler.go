@@ -14,11 +14,9 @@ func outboundHandler(core *kernel.Kernel) {
 
 	for _, o := range rt {
 		client_conn := *o.GetClientConnModule()
-		err := client_conn.ConnectTo(o.GetRelay().GetEndpoint(), o.GetRelay().GetPublicKey())
+		err := client_conn.ConnectTo(o.GetRelay().GetEndpoint(), o.GetRelay().GetPublicKey(), nil)
 		if err != nil {
 			fmt.Println(err)
 		}
-
-		fmt.Println(o.GetRelay().GetProtocol(), o.GetRelay().GetEndpoint())
 	}
 }

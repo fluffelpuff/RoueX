@@ -240,11 +240,25 @@ func (obj *Kernel) AddNewConnection(relay *Relay, conn RelayConnection) error {
 }
 
 // Markiert einen Relay als nicht mehr Verbunden
-func (obj *Kernel) RemoveConnection(relay *Relay, conn RelayConnection) error {
-	// Sollte kein Relay vorhanden sein, wird die Verbindung als nicht Verifiziert gespeichert
-	if err := obj._connection_manager.RemoveRelayConnection(conn); err != nil {
-		return err
+func (obj *Kernel) RemoveConnection(conn RelayConnection) error {
+	// Der Relay wird anahand der Verbindung wird ermittelt
+	relay, found, err := obj._connection_manager.GetRelayByConnection(conn)
+	if err != nil {
+		return fmt.Errorf("RemoveConnection: 1: " + err.Error())
 	}
+
+	// Sollte kein Relay gefunden wurden sein, wird der Vorgang abegrbochen
+	if !found {
+		log.Println("Kernel: has no relay found to remove a connection.")
+	}
+
+	// Die Verbindung wird entfernt
+	if err := obj._connection_manager.RemoveRelayConnection(conn); err != nil {
+		return fmt.Errorf("RemoveConnection: 1: " + err.Error())
+	}
+
+	// Es wird geprüft ob der Relay noch eine Aktive verbindung hat
+	// wenn nicht wird der Destoryer and Watcher Thread für diese Verbindung aktiviert
 
 	// Der Vorgang wurde erfolgreich druchgeführt
 	return nil
@@ -457,7 +471,7 @@ func (obj *Kernel) DecryptOTKECDHById(algo EncryptionAlgo, otk_id string, data [
 
 // Wird verwendet um einen Verschlüsselten Datensatz mit dem Privaten Relay Schlüssel zu enschlüsseln
 func (obj *Kernel) DecryptWithPrivateRelayKey(cipher_data []byte) ([]byte, error) {
-	log.Println("Kernel: decrypting data with relay key. algo = chacha20, data_size =", len(cipher_data))
+	log.Println("Kernel: decrypting data with relay key. data_size =", len(cipher_data))
 	return DecryptDataWithPrivateKey(obj._private_key, cipher_data)
 }
 

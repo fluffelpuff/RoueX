@@ -4,6 +4,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"net"
+	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -12,9 +15,14 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Stellt eine Websocket Kernel Verbindung dar
 type WebsocketKernelClient struct {
 	_kernel *kernel.Kernel
 	_obj_id string
+}
+
+// Stellt Proxy Einstellungen für eine Client Verbindung dar
+type WebsocketKernelProxySettings struct {
 }
 
 // Registriert den Kernel im Modul
@@ -34,18 +42,49 @@ func (obj *WebsocketKernelClient) GetProtocol() string {
 }
 
 // Stellt eine neue Websocket Verbindung her
-func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey) error {
-	// Log
-	log.Printf("Trying to establish a websocket connection to %s -- %s\n", url, hex.EncodeToString(pub_key.SerializeCompressed()))
-
+func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.PublicKey, proxy_config *kernel.ProxyConfig) error {
 	// Es wird versucht eine Websocket verbindung aufzubauen
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
-	if err != nil {
-		return fmt.Errorf("ConnectTo: 1: " + err.Error())
-	}
+	var err error
+	var conn *websocket.Conn
+	if proxy_config != nil {
+		// Set the HTTP proxy to use
+		proxyURL, err := url.Parse(proxy_config.Host)
+		if err != nil {
+			return err
+		}
 
-	// Log
-	log.Printf("The websocket base connection to %s has been established.\n", url)
+		// Create a custom Dialer that uses the HTTP proxy
+		dialer := &websocket.Dialer{
+			Proxy: http.ProxyURL(proxyURL),
+			NetDial: func(network, addr string) (net.Conn, error) {
+				return net.Dial(network, addr)
+			},
+		}
+
+		// Log
+		log.Printf("WebsocketKernelClient: trying to establish a websocket connection to trought proxy %s -- %s \n", url_str, hex.EncodeToString(pub_key.SerializeCompressed()))
+
+		// Die Verbindung wird aufgebaut
+		conn, _, err = dialer.Dial(url_str, nil)
+		if err != nil {
+			return fmt.Errorf("WebsocketKernelClient: connectToError: " + err.Error())
+		}
+
+		// Log
+		log.Printf("WebsocketKernelClient: the websocket base connection to %s has been established.\n", url_str)
+	} else {
+		// Log
+		log.Printf("WebsocketKernelClient: trying to establish a websocket connection to %s -- %s\n", url_str, hex.EncodeToString(pub_key.SerializeCompressed()))
+
+		// Die Verbindung wird aufgebaut
+		conn, _, err = websocket.DefaultDialer.Dial(url_str, nil)
+		if err != nil {
+			return fmt.Errorf("ConnectTo: 1: " + err.Error())
+		}
+
+		// Log
+		log.Printf("WebsocketKernelClient: the websocket base connection to %s has been established.\n", url_str)
+	}
 
 	// Es wird ein Temporäres Schlüsselpaar erstellt
 	key_pair_id, err := obj._kernel.CreateNewTempKeyPair()
@@ -176,7 +215,7 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 	// Solte kein Vertrauenswürdiger Relay vorhanden sein, wird ein Temporärer Relay erzeugt
 	if relay_pkyobj == nil {
 		c_time := time.Now().Unix()
-		relay_pkyobj = kernel.NewUntrustedRelay(pub_key, c_time, url, "ws")
+		relay_pkyobj = kernel.NewUntrustedRelay(pub_key, c_time, url_str, "ws")
 		log.Println("Unkown relay", relay_pkyobj.GetHexId(), "connected")
 	} else {
 		log.Println("Trusted relay", relay_pkyobj.GetHexId(), "connected")
@@ -190,7 +229,7 @@ func (obj *WebsocketKernelClient) ConnectTo(url string, pub_key *btcec.PublicKey
 
 	// Die Verbindung wird final fertigestellt
 	if err := finally_kernel_session.FinallyInit(); err != nil {
-		obj._kernel.RemoveConnection(relay_pkyobj, finally_kernel_session)
+		obj._kernel.RemoveConnection(finally_kernel_session)
 		conn.Close()
 		return err
 	}

@@ -45,6 +45,28 @@ func (obj *WebsocketKernelConnection) RegisterKernel(kernel *kernel.Kernel) erro
 	return nil
 }
 
+// Die Verbindung wurde geschlossen
+func (obj *WebsocketKernelConnection) _destroy_disconnected() {
+	obj._lock.Lock()
+	if obj._is_finally {
+		// Der Verbindung wird geschlossen
+		_ = obj._conn.Close()
+
+		// Es werden alle offenen Ping vorgänge zerstört
+		for i := range obj._ping_processes {
+			obj._ping_processes[i]._signal_abort()
+		}
+
+		// Der Threadlock wird freigegeben
+		obj._lock.Unlock()
+
+		// Der Verbindung wird entfernt
+		obj._kernel.RemoveConnection(obj)
+		return
+	}
+	obj._lock.Unlock()
+}
+
 // Gibt an ob die Lesende Schleife ausgeführt werden kann
 func (obj *WebsocketKernelConnection) _loop_bckg_run() bool {
 	obj._lock.Lock()
@@ -186,7 +208,7 @@ func (obj *WebsocketKernelConnection) __ping_auto_thread_pong() {
 			// Es wird ein Ping vorgang durchgeführt
 			w_time, err := obj._send_ping_and_wait_of_pong()
 			if err != nil {
-				fmt.Println(err)
+				log.Println(err)
 				continue
 			}
 
@@ -278,10 +300,10 @@ func (obj *WebsocketKernelConnection) __recived_pong_paket(data []byte) {
 
 	// Sollte ein Prozess vorhanden sein, wird diesem Signalisiert dass eine Antwort empfangen wurde
 	if result != nil {
-		fmt.Println("WebsocketKernelConnection: pong recived", hex.EncodeToString(pong_package.PingId))
+		log.Println("WebsocketKernelConnection: pong recived", hex.EncodeToString(pong_package.PingId))
 		result._signal_recived_pong()
 	} else {
-		fmt.Println("WebsocketKernelConnection: pong recived, unkown pong process", hex.EncodeToString(pong_package.PingId))
+		log.Println("WebsocketKernelConnection: pong recived, unkown pong process", hex.EncodeToString(pong_package.PingId))
 	}
 }
 
@@ -416,24 +438,17 @@ func (obj *WebsocketKernelConnection) _thread_reader(rewolf chan string) {
 		log.Println("WebsocketKernelConnection:", has_closed_reader_loop)
 	}
 
+	// Log
+	fmt.Println("WebsocketKernelConnection: connection closed. connection =", obj._object_id)
+
 	// Es wird signalisiert dass keine Verbindung mehr verfügbar ist
 	obj._lock.Lock()
 	obj._total_reader_threads--
 	obj._is_connected = false
 	obj._lock.Unlock()
 
-	// Es wird geprüft ob das Objekt bereits fertigestellt wurde, wenn ja wird dem Kernel Signalisiert dass die Verbindung nicht mehr verfügbar ist
-	obj._lock.Lock()
-	if obj._is_finally {
-		// Der Verbindung wird geschlossen
-		_ = obj._conn.Close()
-		obj._lock.Unlock()
-
-		// Der Verbindung wird entfernt
-		obj._kernel.RemoveConnection(nil, obj)
-		return
-	}
-	obj._lock.Unlock()
+	// Die Verbindung wird vollständig vernichtet
+	obj._destroy_disconnected()
 }
 
 // Wird verwendet um ein Paket Abzusenden
@@ -524,6 +539,11 @@ func (obj *WebsocketKernelConnection) FinallyInit() error {
 	// Der Vorgang wurde ohne einen Fehler durchgeführt
 	log.Println("WebsocketKernelConnection: finally connection. connection =", obj._object_id)
 	return nil
+}
+
+// Gibt das verwendete Protokoll an
+func (obj *WebsocketKernelConnection) GetProtocol() string {
+	return "ws"
 }
 
 // Gibt an ob eine Verbindung aufgebaut wurde
