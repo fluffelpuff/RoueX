@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/fluffelpuff/RoueX/kernel"
@@ -19,8 +20,11 @@ var upgrader = websocket.Upgrader{
 }
 
 type WebsocketKernelServerEP struct {
-	_kernel *kernel.Kernel
-	_obj_id string
+	_kernel          *kernel.Kernel
+	_obj_id          string
+	_shutdown_signal bool
+	_server          *http.Server
+	_lock            *sync.Mutex
 }
 
 // Registriert den Kernel im Module
@@ -32,7 +36,11 @@ func (obj *WebsocketKernelServerEP) RegisterKernel(k *kernel.Kernel) error {
 
 // Wird verwendet um den Serversocket herunterzufahren
 func (obj *WebsocketKernelServerEP) Shutdown() {
-	log.Printf("Websocket Server EndPoint shutingdown...\n")
+	obj._lock.Lock()
+	obj._shutdown_signal = true
+	obj._server.Close()
+	obj._lock.Unlock()
+	log.Println("WebsocketKernelServerEP: shutingdown.")
 }
 
 // Startet den eigentlichen Server
@@ -255,20 +263,23 @@ func CreateNewLocalWebsocketServerEP(ip_adr string, port uint64) (*WebsocketKern
 	rand_id := kernel.RandStringRunes(16)
 
 	// Das Objekt wird vorbereitet
-	result_obj := &WebsocketKernelServerEP{_obj_id: rand_id}
+	result_obj := &WebsocketKernelServerEP{_obj_id: rand_id, _lock: new(sync.Mutex)}
 
 	// Es wird eine neuer Thread gestartet, innerhalb dieses Threads wird der HTTP Server ausgeführt
-	go func() {
-		server := &http.Server{
+	go func(wsbo *WebsocketKernelServerEP) {
+		wsbo._server = &http.Server{
 			Addr:    ":" + strconv.Itoa(int(port)),
 			Handler: http.HandlerFunc(result_obj.upgradeHTTPConnAndRegister),
 		}
 
 		// Der Server wird ausgeführt
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := wsbo._server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %s\n", err)
 		}
-	}()
+
+		// Log
+		log.Println("WebsocketKernelServerEP: closed.")
+	}(result_obj)
 
 	// Es wird eine zufälliger Objekt ID erstellt
 	log.Printf("New Websocket Server EndPoint on %s and port %d created\n", ip_adr, port)

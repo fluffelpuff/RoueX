@@ -38,6 +38,7 @@ type RelayConnection interface {
 	FinallyInit() error
 	Write([]byte) error
 	IsConnected() bool
+	CloseByKernel()
 }
 
 // Stellt die Module Funktionen bereit

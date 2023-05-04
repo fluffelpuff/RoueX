@@ -61,7 +61,9 @@ func (obj *WebsocketKernelConnection) _destroy_disconnected() {
 		obj._lock.Unlock()
 
 		// Der Verbindung wird entfernt
-		obj._kernel.RemoveConnection(obj)
+		if err := obj._kernel.RemoveConnection(obj); err != nil {
+			log.Println("WebsocketKernelConnection: error by destorying conenction. error =", err.Error())
+		}
 		return
 	}
 	obj._lock.Unlock()
@@ -351,6 +353,12 @@ func (obj *WebsocketKernelConnection) _thread_reader(rewolf chan string) {
 		// Es wird auf eintreffende Pakete gewartet
 		messageType, message, err := obj._conn.ReadMessage()
 		if err != nil {
+			obj._lock.Lock()
+			if !obj._signal_shutdown {
+				obj._lock.Unlock()
+				break
+			}
+			obj._lock.Unlock()
 			func_muutx.Lock()
 			has_closed_reader_loop = err
 			func_muutx.Unlock()
@@ -439,7 +447,7 @@ func (obj *WebsocketKernelConnection) _thread_reader(rewolf chan string) {
 	}
 
 	// Log
-	fmt.Println("WebsocketKernelConnection: connection closed. connection =", obj._object_id)
+	log.Println("WebsocketKernelConnection: connection closed. connection =", obj._object_id)
 
 	// Es wird signalisiert dass keine Verbindung mehr verfügbar ist
 	obj._lock.Lock()
@@ -500,6 +508,14 @@ func (obj *WebsocketKernelConnection) _write_ws_package(data []byte, tpe Transpo
 	// Der Vorgang wurde ohne Fehler erfolgreich druchgeführt
 	log.Println("WebsocketKernelConnection: bytes writed. connection =", obj._object_id, "size =", len(final_encrypted))
 	return nil
+}
+
+// Gibt an ob die Websocket Verbindung geschlossen wurde
+func (obj *WebsocketKernelConnection) _check_is_full_closed() bool {
+	obj._lock.Lock()
+	r := obj._is_connected
+	obj._lock.Unlock()
+	return !r
 }
 
 // Stellt die Verbindung vollständig fertig
@@ -564,6 +580,41 @@ func (obj *WebsocketKernelConnection) Write(data []byte) error {
 // Gibt die Aktuelle Objekt ID aus
 func (obj *WebsocketKernelConnection) GetObjectId() string {
 	return obj._object_id
+}
+
+// Wird verwendet um die Verbindung zu schließen
+func (obj *WebsocketKernelConnection) CloseByKernel() {
+	// Der Threadlock wird verwendet
+	obj._lock.Lock()
+
+	// Es wird geprüft ob bereits Signalisiert wurde ob die Verbindung geschlossen werden soll
+	if obj._signal_shutdown {
+		obj._lock.Unlock()
+		return
+	}
+
+	// Es wird geprüft ob die Verbindung bereits getrennt wurde
+	if !obj._is_connected {
+		obj._lock.Unlock()
+		return
+	}
+
+	// Log
+	log.Println("WebsocketKernelConnection: close connection by kernel. connection =", obj._object_id)
+
+	// Es wird Signalisiert dass es sich um einen Schließvorgnag handelt
+	obj._signal_shutdown = true
+
+	// Die Werbsocket Verbindung wird geschlossen
+	obj._conn.Close()
+
+	// Der Threadlock wird freigegeben
+	obj._lock.Unlock()
+
+	// Wartet solange bis die Schleife geschlossen wurde
+	for !obj._check_is_full_closed() {
+		time.Sleep(1 * time.Millisecond)
+	}
 }
 
 // Erstellt ein neues Kernel Sitzungs Objekt
