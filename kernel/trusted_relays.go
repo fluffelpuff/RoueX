@@ -72,7 +72,7 @@ func loadTrustedRelaysTable(path string) (TrustedRelays, error) {
 		fmt.Printf("New Trusted Relays Database created %s\n", path)
 	} else {
 		// Es werden alle Verfügabren Relays abgerufen
-		rows, err := db.Query("SELECT * FROM relays")
+		rows, err := db.Query("SELECT * FROM relays WHERE active = 1")
 		if err != nil {
 			return TrustedRelays{}, err
 		}

@@ -2,7 +2,6 @@ package kernel
 
 import (
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/fluffelpuff/RoueX/apis/module"
 )
 
 // Stellt das Gerüst für ein Server Modul dar
@@ -48,7 +47,6 @@ type RelayConnection interface {
 type ExternalModule interface {
 	GetName() string
 	GetVersion() uint64
-	Base() module.Atr
 }
 
 // Überträgt Verschlüsselte Daten

@@ -1,3 +1,5 @@
+//go:build !wasm
+
 package kernel
 
 import (
@@ -38,18 +40,16 @@ func (obj *Kernel) LoadExternalKernelModules() error {
 			continue
 		}
 
-		fmt.Println("SO FILE")
-
 		// Es wird versucht das Module einzulesen
 		plug, err := plugin.Open(obj._external_modules_path + obj._os_path_trimmer + file.Name())
 		if err != nil {
-			panic(err)
+			continue
 		}
 
 		// Es wird geprüft ob es die Schnittstelle (Variable) "Module" gibt
 		lamda_kernel_mod, err := plug.Lookup("Module")
 		if err != nil {
-			panic(err)
+			continue
 		}
 
 		// Es wird geprüft ob die Eigentliche Module Information vorhanden ist
@@ -57,8 +57,6 @@ func (obj *Kernel) LoadExternalKernelModules() error {
 		if !ok {
 			panic(fmt.Sprint("Kernel: invalid kernel module cant load. id =", obj._kernel_id))
 		}
-
-		fmt.Println("ASOPA")
 
 		// Log
 		log.Printf("Kernel: module loaded. id = %s, module = %s, name = %s\n", obj._kernel_id, obj._external_modules_path+obj._os_path_trimmer+file.Name(), extr_module.GetName())
@@ -76,6 +74,7 @@ func (obj *Kernel) LoadExternalKernelModules() error {
 
 // Wird verwendet um die Externen Kernel Module zu starten
 func (obj *Kernel) StartExternalKernelModules() error {
-	log.Println("Kernel: starting external kernel modules...")
+	log.Println("Kernel: starting external kernel modules. id =", obj._kernel_id)
+	log.Println("Kernel: external modules started. id =", obj._kernel_id)
 	return nil
 }
