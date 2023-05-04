@@ -203,12 +203,15 @@ func (obj *ConnectionManager) ShutdownByKernel() {
 	obj._lock.Lock()
 
 	// Es wird allen Relays Signalisiert dass sie all ihre Verbindungen schließen sollen
-	for i := range obj._connection {
-		obj._connection[i].kernel_shutdown()
-	}
+	relist := obj._connection
 
 	// Der Threadlock wird freigeben
 	obj._lock.Unlock()
+
+	// Die Verbindungen werden geschlossen
+	for i := range relist {
+		relist[i].kernel_shutdown()
+	}
 
 	// Es wird gewartet bis alle Verbindungen geschlossen wurden
 	for obj.HasActiveConnections() {

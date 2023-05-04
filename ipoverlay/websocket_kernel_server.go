@@ -23,8 +23,18 @@ type WebsocketKernelServerEP struct {
 	_kernel          *kernel.Kernel
 	_obj_id          string
 	_shutdown_signal bool
+	_is_running      bool
 	_server          *http.Server
 	_lock            *sync.Mutex
+	_port            int
+}
+
+// Gibt an ob der Server ausgeführt wird
+func (obj *WebsocketKernelServerEP) _is_rn() bool {
+	obj._lock.Lock()
+	r := obj._is_running
+	obj._lock.Unlock()
+	return r
 }
 
 // Registriert den Kernel im Module
@@ -36,16 +46,56 @@ func (obj *WebsocketKernelServerEP) RegisterKernel(k *kernel.Kernel) error {
 
 // Wird verwendet um den Serversocket herunterzufahren
 func (obj *WebsocketKernelServerEP) Shutdown() {
+	// Log
+	log.Println("WebsocketKernelServerEP: shutingdown. id =", obj._obj_id)
+
+	// Es wird Signalisiert dass der Server beendet werden soll
 	obj._lock.Lock()
 	obj._shutdown_signal = true
 	obj._server.Close()
 	obj._lock.Unlock()
-	log.Println("WebsocketKernelServerEP: shutingdown.")
+
+	// Es wird gewartet bis der Server beendet wurde
+	for obj._is_rn() {
+		time.Sleep(1 * time.Millisecond)
+	}
 }
 
 // Startet den eigentlichen Server
 func (obj *WebsocketKernelServerEP) Start() error {
-	log.Printf("New Websocket Server EndPoint started\n")
+	// Es wird eine neuer Thread gestartet, innerhalb dieses Threads wird der HTTP Server ausgeführt
+	go func(wsbo *WebsocketKernelServerEP) {
+		wsbo._server = &http.Server{
+			Addr:    ":" + strconv.Itoa(wsbo._port),
+			Handler: http.HandlerFunc(wsbo.upgradeHTTPConnAndRegister),
+		}
+
+		// Es wird Signalisiert dass der Server läuft
+		wsbo._lock.Lock()
+		wsbo._is_running = true
+		wsbo._lock.Unlock()
+
+		// Der Server wird ausgeführt
+		log.Println("WebsocketKernelServerEP: new server started. id =", obj._obj_id)
+		if err := wsbo._server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+
+		// Es wird Signalisiert dass der Server nicht mehr ausgeführt wird
+		wsbo._lock.Lock()
+		wsbo._is_running = false
+		wsbo._lock.Unlock()
+
+		// Log
+		log.Println("WebsocketKernelServerEP: closed. id =", obj._obj_id)
+	}(obj)
+
+	// Es wird gewartet bis der Server gestartet wurde
+	for !obj._is_rn() {
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	// Der Vorgang wurde ohne Fehler gestartet
 	return nil
 }
 
@@ -264,22 +314,6 @@ func CreateNewLocalWebsocketServerEP(ip_adr string, port uint64) (*WebsocketKern
 
 	// Das Objekt wird vorbereitet
 	result_obj := &WebsocketKernelServerEP{_obj_id: rand_id, _lock: new(sync.Mutex)}
-
-	// Es wird eine neuer Thread gestartet, innerhalb dieses Threads wird der HTTP Server ausgeführt
-	go func(wsbo *WebsocketKernelServerEP) {
-		wsbo._server = &http.Server{
-			Addr:    ":" + strconv.Itoa(int(port)),
-			Handler: http.HandlerFunc(result_obj.upgradeHTTPConnAndRegister),
-		}
-
-		// Der Server wird ausgeführt
-		if err := wsbo._server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
-		}
-
-		// Log
-		log.Println("WebsocketKernelServerEP: closed.")
-	}(result_obj)
 
 	// Es wird eine zufälliger Objekt ID erstellt
 	log.Printf("New Websocket Server EndPoint on %s and port %d created\n", ip_adr, port)

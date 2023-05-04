@@ -5,8 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"os"
-	"plugin"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 )
@@ -16,7 +14,7 @@ func (obj *Kernel) RegisterServerModule(lcsep ServerModule) error {
 	if obj.IsRunning() {
 		return fmt.Errorf("can't add local ep than server is running")
 	}
-	log.Printf("Register new server module, protocol = %s, id = %s\n", lcsep.GetProtocol(), lcsep.GetObjectId())
+	log.Println("Kernel: register new server module.", "protocol =", lcsep.GetProtocol(), "id =", lcsep.GetObjectId())
 	if err := lcsep.RegisterKernel(obj); err != nil {
 		return err
 	}
@@ -29,7 +27,7 @@ func (obj *Kernel) RegisterClientModule(csep ClientModule) error {
 	if obj.IsRunning() {
 		return fmt.Errorf("can't add local ep than server is running")
 	}
-	log.Printf("Register new client module, protocol = %s, id = %s\n", csep.GetProtocol(), csep.GetObjectId())
+	log.Println("Kernel: register new client module.", "protocol =", csep.GetProtocol(), "id =", csep.GetObjectId())
 	if err := csep.RegisterKernel(obj); err != nil {
 		return err
 	}
@@ -84,58 +82,6 @@ func (obj *Kernel) RemoveConnection(conn RelayConnection) error {
 	}
 
 	// Der Vorgang wurde erfolgreich druchgeführt
-	return nil
-}
-
-// Wird verwendet um Third Party oder Externe Kernel Module zu laden
-func (obj *Kernel) LoadExternalKernelModules() error {
-	files, err := os.ReadDir(obj._external_modules_path)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Printf("Loading external Kernel Modules from %s\n", obj._external_modules_path)
-
-	loaded_modules := []*ExternalModule{}
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-
-		plug, err := plugin.Open(obj._external_modules_path + obj._os_path_trimmer + file.Name())
-		if err != nil {
-			continue
-		}
-
-		lamda_kernel_mod, err := plug.Lookup("Module")
-		if err != nil {
-			fmt.Println(file.Name(), err)
-			continue
-		}
-
-		loaded_kernel_module, ok := lamda_kernel_mod.(ExternalModule)
-		if !ok {
-			fmt.Println("NOT_OK")
-			continue
-		}
-
-		log.Printf("Kernel Module %s loaded\n", obj._external_modules_path+obj._os_path_trimmer+file.Name())
-
-		if err := loaded_kernel_module.Info(); err != nil {
-			fmt.Println(err)
-			return err
-		}
-
-		loaded_modules = append(loaded_modules, &loaded_kernel_module)
-	}
-
-	log.Printf("%d Kernel Modules loaded\n", len(loaded_modules))
-	return nil
-}
-
-// Wird verwendet um die Externen Kernel Module zu starten
-func (obj *Kernel) StartExternalKernelModules() error {
-	log.Println("Starting external kernel modules")
 	return nil
 }
 

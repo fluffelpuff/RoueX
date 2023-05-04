@@ -24,6 +24,7 @@ type WebsocketKernelConnection struct {
 	_bandwith              []float64
 	_otk_ecdh_key_id       string
 	_is_connected          bool
+	_destroyed             bool
 	_ping_processes        []*PingProcess
 	_conn                  *websocket.Conn
 	_kernel                *kernel.Kernel
@@ -64,6 +65,13 @@ func (obj *WebsocketKernelConnection) _destroy_disconnected() {
 		if err := obj._kernel.RemoveConnection(obj); err != nil {
 			log.Println("WebsocketKernelConnection: error by destorying conenction. error =", err.Error())
 		}
+
+		// Das Objekt wird als zerstört Markiert
+		obj._lock.Lock()
+		obj._destroyed = true
+		obj._lock.Unlock()
+
+		// Der Vorgang wird beenet
 		return
 	}
 	obj._lock.Unlock()
@@ -196,7 +204,7 @@ func (obj *WebsocketKernelConnection) __ping_auto_thread_pong() {
 	log.Println("WebsocketKernelConnection: connection ping pong thread started. connection =", obj._object_id)
 
 	// Wird solange ausgeführt, solange die Verbindung verbunden ist
-	for obj.IsConnected() {
+	for obj._loop_bckg_run() {
 		// Zeitdauer seit last_ping messen
 		elapsed := time.Since(last_ping)
 
@@ -354,7 +362,7 @@ func (obj *WebsocketKernelConnection) _thread_reader(rewolf chan string) {
 		messageType, message, err := obj._conn.ReadMessage()
 		if err != nil {
 			obj._lock.Lock()
-			if !obj._signal_shutdown {
+			if obj._signal_shutdown {
 				obj._lock.Unlock()
 				break
 			}
@@ -512,10 +520,26 @@ func (obj *WebsocketKernelConnection) _write_ws_package(data []byte, tpe Transpo
 
 // Gibt an ob die Websocket Verbindung geschlossen wurde
 func (obj *WebsocketKernelConnection) _check_is_full_closed() bool {
+	// Der Threadlock wird verwendet
 	obj._lock.Lock()
-	r := obj._is_connected
+
+	// Es wird ermittelt ob der Socket verbunden ist
+	r := !obj._is_connected
+
+	// Es wird ermittelt wieviele Ping Prozesse vorhanden sind
+	p := len(obj._ping_processes) == 0
+
+	// Es wird ermittelt ob alle Reader geschlossen wurden
+	t := obj._total_reader_threads == 0
+
+	// Gibt an ob das Objekt zerstört wurde
+	x := obj._destroyed
+
+	// Der Threadlock wird freigegeben
 	obj._lock.Unlock()
-	return !r
+
+	// Das Ergebniss wird zurückgegeben
+	return r && p && t && x
 }
 
 // Stellt die Verbindung vollständig fertig

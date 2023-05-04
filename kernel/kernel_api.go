@@ -7,6 +7,7 @@ import (
 	"net/rpc"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/fluffelpuff/RoueX/static"
 )
@@ -36,6 +37,14 @@ func (obj *KernelAPI) _ral() bool {
 	obj._lock.Lock()
 	r := obj._signal_shutdown
 	obj._lock.Unlock()
+	return !r
+}
+
+// Gibt an ob die API noch ausgeführt wird
+func (obj *KernelAPI) _irn() bool {
+	obj._lock.Lock()
+	r := obj._is_running
+	obj._lock.Unlock()
 	return r
 }
 
@@ -57,7 +66,13 @@ func (obj *KernelAPI) _start_by_kernel() error {
 		for obj._ral() {
 			conn, err := obj._socket.Accept()
 			if err != nil {
-				log.Fatal("Accept error: ", err)
+				obj._lock.Lock()
+				if obj._signal_shutdown {
+					obj._lock.Unlock()
+					break
+				}
+				obj._lock.Unlock()
+				fmt.Println("KernelAPI: error by accepting new api-connection. id =", obj._object_id)
 			}
 			go rpcServer.ServeConn(conn)
 		}
@@ -82,6 +97,10 @@ func (obj *KernelAPI) _close_by_kernel() {
 	obj._signal_shutdown = true
 	obj._socket.Close()
 	obj._lock.Unlock()
+
+	for obj._irn() {
+		time.Sleep(1 * time.Millisecond)
+	}
 
 	log.Println("KernelAPI: closed by kernel. id =", obj._object_id, ", path =", obj._socket_unix_path)
 }

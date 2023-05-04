@@ -11,7 +11,7 @@ import (
 type connection_io_pair struct {
 	_route_endpoints []RouteEntry
 	_conn            []RelayConnection
-	_lock            *sync.Mutex
+	_lock            sync.Mutex
 	_relay           *Relay
 	_active          bool
 }
@@ -218,13 +218,14 @@ func (obj *connection_io_pair) _is_used_conenction(conn RelayConnection) bool {
 // Wird verwendet um alle Verbindungen durch den Kernel zu schließen
 func (obj *connection_io_pair) kernel_shutdown() {
 	obj._lock.Lock()
-	for i := range obj._conn {
-		obj._conn[i].CloseByKernel()
-	}
+	cp_list := obj._conn
 	obj._lock.Unlock()
+	for i := range cp_list {
+		cp_list[i].CloseByKernel()
+	}
 }
 
 // Erstellt ein neues Connection IO Pair
 func createNewConnectionIoPair(relay *Relay) *connection_io_pair {
-	return &connection_io_pair{_relay: relay, _lock: new(sync.Mutex), _active: false}
+	return &connection_io_pair{_relay: relay, _lock: sync.Mutex{}, _active: false}
 }

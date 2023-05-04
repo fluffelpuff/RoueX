@@ -64,13 +64,13 @@ func (obj *Kernel) Shutdown() {
 			vat.Shutdown()
 		}
 
+		// Es werden alle Verbindungen geschlossen
+		obj._connection_manager.ShutdownByKernel()
+
 		// Die API Schnitstellen werden geschlossen
 		for i := range obj._api_interfaces {
 			obj._api_interfaces[i]._close_by_kernel()
 		}
-
-		// Es werden alle Verbindungen geschlossen
-		obj._connection_manager.ShutdownByKernel()
 
 		// Die Datenbanken werden geschlossen
 		obj._routing_table.Shutdown()
@@ -144,9 +144,6 @@ func CreateOSXKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 		panic(err)
 	}
 
-	// Log
-	fmt.Println("RoueX OSX Kernel API Unix-Socket created...")
-
 	// Die KernelID wird estellt
 	k_id := RandStringRunes(16)
 
@@ -176,6 +173,6 @@ func CreateOSXKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 	}
 
 	// Gibt das Kernelobjekt ohne Fehler zurück
-	fmt.Printf("New OSX RoueX Kernel '%s' created...\n", k_id)
+	log.Println("Kernel: new osx kernel created. id =", k_id)
 	return &new_kernel, nil
 }
