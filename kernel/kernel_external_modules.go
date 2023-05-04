@@ -5,7 +5,14 @@ import (
 	"log"
 	"os"
 	"plugin"
+	"strings"
 )
+
+// Gibt an ob es sich um ein zulässiges Dateiformat handelt
+func _is_validate_file_type(tpe string) bool {
+	rw := strings.Split(tpe, ".")
+	return rw[len(rw)-1] == "so"
+}
 
 // Wird verwendet um Third Party oder Externe Kernel Module zu laden
 func (obj *Kernel) LoadExternalKernelModules() error {
@@ -26,17 +33,23 @@ func (obj *Kernel) LoadExternalKernelModules() error {
 			continue
 		}
 
+		// Es wird geprüft ob es sich um eine zulässiges Dateiformat handelt
+		if !_is_validate_file_type(file.Name()) {
+			continue
+		}
+
+		fmt.Println("SO FILE")
+
 		// Es wird versucht das Module einzulesen
 		plug, err := plugin.Open(obj._external_modules_path + obj._os_path_trimmer + file.Name())
 		if err != nil {
-			continue
+			panic(err)
 		}
 
 		// Es wird geprüft ob es die Schnittstelle (Variable) "Module" gibt
 		lamda_kernel_mod, err := plug.Lookup("Module")
 		if err != nil {
-			fmt.Println(file.Name(), err)
-			continue
+			panic(err)
 		}
 
 		// Es wird geprüft ob die Eigentliche Module Information vorhanden ist
@@ -45,15 +58,17 @@ func (obj *Kernel) LoadExternalKernelModules() error {
 			panic(fmt.Sprint("Kernel: invalid kernel module cant load. id =", obj._kernel_id))
 		}
 
+		fmt.Println("ASOPA")
+
 		// Log
 		log.Printf("Kernel: module loaded. id = %s, module = %s, name = %s\n", obj._kernel_id, obj._external_modules_path+obj._os_path_trimmer+file.Name(), extr_module.GetName())
 
 		// Das Module wird der Modules liste hinzugefügt
-		//loaded_modules = append(loaded_modules, &loaded_kernel_module)
+		loaded_modules = append(loaded_modules, &extr_module)
 	}
 
 	// Log
-	log.Printf("Kernel: total modules loaded. id = %s, total =%d\n", obj._kernel_id, len(loaded_modules))
+	log.Printf("Kernel: total modules loaded. id = %s, total = %d\n", obj._kernel_id, len(loaded_modules))
 
 	// Der Vorgang wurde ohne Fehler abgeschlossen
 	return nil
