@@ -18,7 +18,7 @@ type Kernel struct {
 	_kernel_id             string
 	_is_running            bool
 	_lock                  *sync.Mutex
-	_routing_table         *RoutingTable
+	_routing_table         *RoutingManager
 	_trusted_relays        *TrustedRelays
 	_server_modules        []*ServerModule
 	_client_modules        []*ClientModule
@@ -72,7 +72,7 @@ func CreateOSXKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 	}
 
 	// Es wird versucht die Routing Tabelle zu laden
-	routing_table_obj, err := loadRoutingTable(static.GetFilePathFor(static.ROUTING_TABLE))
+	routing_table_obj, err := loadRoutingManager(static.GetFilePathFor(static.ROUTING_TABLE))
 	if err != nil {
 		log.Fatal("listen error:", err)
 		return nil, err

@@ -57,6 +57,12 @@ const (
 	WIN32_SERVER_RELAY_PRIVATE_KEY_FILE = "/Users/fluffelbuff/Desktop/relay.privkey.r"
 )
 
+// Speichert Namen, Version, etc ab
+const (
+	ADDRESS_PREFIX string = "rx"
+	VERSION        uint64 = 1000000
+)
+
 // Definiert den Datentypen für Dateieen
 type File int
 

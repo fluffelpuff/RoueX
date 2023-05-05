@@ -1,24 +1,27 @@
 package kernel
 
 import (
-	"bytes"
+	"encoding/hex"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
-	"time"
 )
 
-// Stellt den Verbindungsmanager dar
-type ConnectionManager struct {
-	_lock       *sync.Mutex
-	_connection []*connection_io_pair
+// Stellt eine Verbindungspaar dar
+type connection_io_pair struct {
+	_route_endpoints []RoutingManagerEntry
+	_conn            []RelayConnection
+	_lock            sync.Mutex
+	_relay           *Relay
+	_active          bool
 }
 
-// Gibt an ob es eine Aktive Verbindung gibt
-func (obj *ConnectionManager) HasActiveConnections() bool {
+// Diese Funktion gibt an ob es eine Aktive verbindung für diesen Relay gibt
+func (obj *connection_io_pair) HasActiveConnections() bool {
 	obj._lock.Lock()
-	for i := range obj._connection {
-		if obj._connection[i].HasActiveConnections() {
+	for i := range obj._conn {
+		if obj._conn[i].IsConnected() {
 			obj._lock.Unlock()
 			return true
 		}
@@ -27,63 +30,181 @@ func (obj *ConnectionManager) HasActiveConnections() bool {
 	return false
 }
 
-// Fügt eine neue AKtive Verbindung zum Manager hinzu
-func (obj *ConnectionManager) RegisterNewRelayConnection(relay *Relay, conn RelayConnection) error {
-	// Es wird geprüft ob ein Relay vorhanden ist, wenn nicht wird ein Fehler produziert
-	if relay == nil {
-		return fmt.Errorf("RegisterNewRelayConnection: you need a relay object")
-	}
-
+// Fügt dem Paar eine Verbindung hinzu
+func (obj *connection_io_pair) add_connection(conn RelayConnection) error {
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
 
-	// Es wird geprüft ob es bereits ein Relay mit diesem Öffentlichen Schlüssel gibt
-	for i := range obj._connection {
-		if bytes.Equal(obj._connection[i]._relay._public_key.SerializeCompressed(), relay._public_key.SerializeCompressed()) {
-			log.Println("ConnectionManager: relay connection added. relay =", relay._hexed_id, "connection =", conn.GetObjectId())
-			obj._connection[i].add_connection(conn)
+	// Es wird geprüft ob die Verbindung diesem Relay bereits zugeodnet wurde
+	for i := range obj._conn {
+		if obj._conn[i].GetObjectId() == conn.GetObjectId() {
 			obj._lock.Unlock()
-			return nil
+			return fmt.Errorf("connection_io_pair: add_connection: 1: connection always added")
 		}
 	}
 
-	// Es wird eine neuer RelayIO erstellt
-	relay_io_object := createNewConnectionIoPair(relay)
+	// Die Verbindung wird hinzugefügt
+	obj._conn = append(obj._conn, conn)
 
-	// Dem Relay wird eine Verbindung zugeordnet
-	err := relay_io_object.add_connection(conn)
-	if err != nil {
-		obj._lock.Unlock()
-		return fmt.Errorf("ConnectionManager:RegisterNewRelayConnection: " + err.Error())
-	}
-
-	// Es wurde kein Relay gefunden, es wird ein neuer Haupteintrag erzeugt
-	obj._connection = append(obj._connection, relay_io_object)
-
-	// Der Thradlock wird freigegeben
+	// Der Threadlock wird freigegeben
 	obj._lock.Unlock()
 
 	// Log
-	log.Println("ConnectionManager: new Relay added. relay =", relay.GetPublicKeyHexString(), "connection =", conn.GetObjectId())
+	log.Println("connection_io_pair: new connection to relay added. relay =", obj._relay._hexed_id, "connection =", conn.GetObjectId(), "protocol =", conn.GetProtocol())
 
-	// Der Vorgang wurde ohne Fehler erfolgreich druchgeführt
+	// Der Vorgang wurde ohne fehler durchgeführt
 	return nil
 }
 
-// Entfernt eine Verbindung
-func (obj *ConnectionManager) RemoveConnectionFromRelay(conn RelayConnection) error {
+// Entfernt eine Spezifische Verbindung
+func (obj *connection_io_pair) remove_connection(conn RelayConnection) error {
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
 
-	// Es wird geprüft ob es bereits ein Relay mit diesem Öffentlichen Schlüssel gibt
-	var has_found_entry bool
-	for i := range obj._connection {
-		if obj._connection[i]._is_used_conenction(conn) {
-			if err := obj._connection[i].remove_connection(conn); err != nil {
-				obj._lock.Unlock()
-				return fmt.Errorf("ConnectionManager: RemoveConnectionFromRelay: 1: " + err.Error())
+	// Es wird geprüft ob die Verbindung diesem Relay bereits zugeodnet wurde
+	to_remove_hight := -1
+	for i := range obj._conn {
+		if obj._conn[i].GetObjectId() == conn.GetObjectId() {
+			to_remove_hight = i
+			break
+		}
+	}
+
+	// Sollte die Verbindung nicht gefunden wurden sein, wird der Vorgang abgebrochen
+	if to_remove_hight == -1 {
+		obj._lock.Unlock()
+		return nil
+	}
+
+	// Die Verbindung wird entfernt
+	obj._conn = append(obj._conn[:to_remove_hight], obj._conn[to_remove_hight+1:]...)
+
+	// Der Threadlock wird freigegeben
+	obj._lock.Unlock()
+
+	// Log
+	log.Println("connection_io_pair: connection from relay removed. relay =", obj._relay._hexed_id, "connection =", conn.GetObjectId(), "protocol =", conn.GetProtocol())
+
+	// Es wird geprüft ob noch eine weitere Verbindung vorhanden ist, wenn nein wird der Relay deaktiviert
+	if !obj.HasActiveConnections() {
+		obj._event_no_active_connection()
+	}
+
+	// Der Vorgang wurde ohne fehler durchgeführt
+	return nil
+}
+
+// Fügt Routen hinzu
+func (obj *connection_io_pair) _add_route_entrys(routes []*RoutingManagerEntry) error {
+	// Der Threadlock wird verwendet
+	obj._lock.Lock()
+
+	// Die Routen welche hinzugefügt werden soll
+	for i := range routes {
+		// Es wird geprüft ob die Route bereits vorhanden ist
+		has_found_route_endpoint := false
+		for x := range obj._route_endpoints {
+			if obj._route_endpoints[x]._relay_hex_id == routes[i]._relay_hex_id {
+				has_found_route_endpoint = true
+				break
 			}
-			has_found_entry = true
+		}
+
+		// Sollte der Eintrag gefunden wurden sein, wird
+		if has_found_route_endpoint {
+			continue
+		}
+
+		// Log
+		log.Println("connection_io_pair: add route to relay =", obj._relay._hexed_id, "address =", obj._relay._hexed_id)
+
+		// Der Eintrag wird hinzugefügt
+		obj._route_endpoints = append(obj._route_endpoints, *routes[i])
+	}
+
+	// Gibt den Threadlock frei
+	obj._lock.Unlock()
+
+	// Der Vorgang wurde ohne Fehler durchgeführt
+	return nil
+}
+
+// Signalisiert dass der Relay verwendet werden kann
+func (obj *connection_io_pair) _signal_activated() error {
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+
+	// Es wird geprüft ob die Routen bereits initalisiert wurden
+	if obj._active {
+		obj._lock.Unlock()
+		return nil
+	}
+
+	// Es wird geprüft ob eine Aktive Verbindung vorhanden ist
+	has_found_active_connection := false
+	for i := range obj._conn {
+		if obj._conn[i].IsConnected() {
+			has_found_active_connection = true
+			break
+		}
+	}
+
+	// Sollte keine Aktive Verbindung vorhanden sein wird der Vorgang abgebrochen
+	if !has_found_active_connection {
+		obj._lock.Unlock()
+		return fmt.Errorf("connection_io_pair: relay has no active connection. relay =" + obj._relay._hexed_id)
+	}
+
+	// Das Relay wird Aktiviert
+	obj._active = true
+
+	// Der Threadlock wird freigegeben
+	obj._lock.Unlock()
+
+	// Log
+	log.Println("connection_io_pair: relay and route activated. relay =", obj._relay._hexed_id, "address =", hex.EncodeToString(obj._relay._public_key.SerializeCompressed()))
+
+	// Der Vorgang wurde ohne fehler durchgeführt
+	return nil
+}
+
+// Wird ausgeführt wenn keine Verbindung mehr vorhanden ist
+func (obj *connection_io_pair) _event_no_active_connection() {
+	// Der Threadlock wird verwendet
+	obj._lock.Lock()
+
+	// Es wird nocheinmal geprüft ob eine Verbindung vorhanden ist
+	if len(obj._conn) != 0 {
+		obj._lock.Unlock()
+		return
+	}
+
+	// Es wird geprüft ob das Relay beits Deaktiviert wurde
+	if !obj._active {
+		obj._lock.Unlock()
+		return
+	}
+
+	// Das Objekt wird Deaktiviert
+	obj._active = false
+
+	// Der Threadlock wird freigebene
+	obj._lock.Unlock()
+
+	// Gibt den Log an
+	log.Println("connection_io_pair: relay has no connections, disabled. relay =", obj._relay._hexed_id)
+}
+
+// Gibt an ob die Verbindung teil das Paares ist
+func (obj *connection_io_pair) _is_used_conenction(conn RelayConnection) bool {
+	// Der Threadlock wird verwendet
+	obj._lock.Lock()
+
+	// Es wird geprüft ob die Verbindung von diesem Relay genutzt wird
+	is_used := false
+	for i := range obj._conn {
+		if obj._conn[i].GetObjectId() == conn.GetObjectId() {
+			is_used = true
 			break
 		}
 	}
@@ -91,135 +212,125 @@ func (obj *ConnectionManager) RemoveConnectionFromRelay(conn RelayConnection) er
 	// Der Threadlock wird freigegeben
 	obj._lock.Unlock()
 
-	// Sollte kein Eintrag gefunden wurden sein, wird der Vorgang abgebrochen
-	if !has_found_entry {
-		log.Println("ConnectionManager: can't remove unkown connection. connection =", conn.GetObjectId())
+	// Der Status wird zurückgegeb
+	return is_used
+}
+
+// Wird verwendet um alle Verbindungen durch den Kernel zu schließen
+func (obj *connection_io_pair) kernel_shutdown() {
+	obj._lock.Lock()
+	cp_list := obj._conn
+	obj._lock.Unlock()
+	for i := range cp_list {
+		cp_list[i].CloseByKernel()
+	}
+}
+
+// Ermittelt die Schnellste Verbindung
+func (obj *connection_io_pair) GetBestConnection() RelayConnection {
+	// Der Threadlock wird verwendet
+	obj._lock.Lock()
+
+	// Die Verbindungen werden Sortiert
+	pre_sorted := []RelayConnection(obj._conn)
+	sort.Sort(ByRelayConnection(pre_sorted))
+
+	// Der Threadlock wird freigegeben
+	obj._lock.Unlock()
+
+	// Es wird geprüft ob Mindestens eine Verbindung verfügbar ist
+	if len(pre_sorted) < 1 {
 		return nil
 	}
 
-	// Der Vorgang wurde ohne fehler erfolgreich durchgeführt
+	// Es wird geprüft ob die Schnellste Verbindung noch vorhanden ist
+	for len(pre_sorted) > 0 {
+		if pre_sorted[0].IsConnected() {
+			return pre_sorted[0]
+		} else {
+			pre_sorted = pre_sorted[1:]
+		}
+	}
+
+	// Es ist keine Verbindung verfügbar
 	return nil
 }
 
-// Gibt an ob der Relay Verbunden ist
-func (obj *ConnectionManager) RelayIsConnected(relay *Relay) bool {
-	// Der Threadlock wird ausgeführt
+// Gibt die Gesendete und Empfange Daten Menge an
+func (obj *connection_io_pair) GetRxTxBytes() (uint64, uint64) {
+	// Es werden alle Verbindungen abgerufen
 	obj._lock.Lock()
+	conns := []RelayConnection(obj._conn)
+	obj._lock.Unlock()
 
-	// Es wird geprüft ob es eine Aktive Verbindung für das Relay gibt
-	for i := range obj._connection {
-		if obj._connection[i]._relay._hexed_id == relay._hexed_id {
-			obj._lock.Unlock()
-			return true
+	// Solte keine Verbindung vorhanden sein
+	if len(conns) < 1 {
+		return 0, 0
+	}
+
+	// Die Gesamte Datenmenge wird ermittelt
+	tx, rx := uint64(0), uint64(0)
+	for i := range conns {
+		if !conns[i].IsConnected() {
+			continue
+		}
+		_tx, _rx := conns[i].GetTxRxBytes()
+		tx += _tx
+		rx += _rx
+	}
+
+	// Die Daten werden zurückgegeben
+	return tx, rx
+}
+
+// Gibt die Aktuellen MetaDaten der Verbindung uas
+func (obj *connection_io_pair) GetMetaDataInformations() *RelayConnectionMetaData {
+	// Die Schnelleste Verbindung wird ermittelt
+	best_conn := obj.GetBestConnection()
+	if best_conn == nil {
+		return &RelayConnectionMetaData{
+			TotalConnections: 0,
+			IsConnected:      false,
+			IsTrusted:        obj._relay._trusted,
+			TotalWrited:      0,
+			TotalReaded:      0,
+			PingMS:           0,
+			BandwithKBs:      0,
 		}
 	}
 
-	// Der Threadlock wird freigegben
-	obj._lock.Unlock()
+	// Gibt die Gesendete und Empfange Datenmenge an
+	tx_bytes, rx_bytes := obj.GetRxTxBytes()
 
-	// Es wurde keine Aktive Realy Verbinding gefunden
-	return false
-}
-
-// Ruft ein Relay anhand einer Verbindung ab
-func (obj *ConnectionManager) GetRelayByConnection(conn RelayConnection) (*Relay, bool, error) {
-	// Der Threadlock wird ausgeführt
-	obj._lock.Lock()
-
-	// Es wird geprüft ob es eine Verbindung mit dieser ID gibt
-	var has_found bool
-	var frelay *Relay
-	for i := range obj._connection {
-		for x := range obj._connection[i]._conn {
-			if obj._connection[i]._conn[x].GetObjectId() == conn.GetObjectId() {
-				frelay = obj._connection[i]._relay
-				has_found = true
-				break
-			}
-		}
-		if has_found {
-			break
+	// Gibt an ob es eine Aktive Verbindung gibt
+	if !obj.HasActiveConnections() || !best_conn.IsConnected() {
+		return &RelayConnectionMetaData{
+			IsTrusted:        obj._relay._trusted,
+			TotalWrited:      tx_bytes,
+			TotalReaded:      rx_bytes,
+			IsConnected:      false,
+			TotalConnections: 0,
+			PingMS:           0,
+			BandwithKBs:      0,
 		}
 	}
 
-	// Sollte kein Relay gefunden wurden sein, wird der Vorgang abgebrochen
-	if !has_found {
-		obj._lock.Unlock()
-		return nil, false, nil
+	//Erzeugt den Rückgabewert
+	result := &RelayConnectionMetaData{
+		PingMS:           best_conn.GetPingTime(),
+		IsTrusted:        obj._relay._trusted,
+		TotalWrited:      tx_bytes,
+		TotalReaded:      rx_bytes,
+		IsConnected:      false,
+		TotalConnections: 0,
+		BandwithKBs:      0,
 	}
 
-	// Der Threadlock wird feigegeben
-	obj._lock.Unlock()
-
-	// Der Vorgang wurde ohne fehler abgeschlossen
-	return frelay, true, nil
+	// Gibt die Daten zurück
+	return result
 }
 
-// Wird verwendet um alle Aktiven Routen für ein Relay zu Initalisieren
-func (obj *ConnectionManager) InitRoutesForRelay(relay *Relay, routes []*RouteEntry) error {
-	// Der Threadlock wird ausgeführt
-	obj._lock.Lock()
-
-	// Das Relay wird herausgesucht
-	for i := range obj._connection {
-		if obj._connection[i]._relay._hexed_id == relay._hexed_id {
-			// Log
-			log.Println("ConnectionManager: try initing routes for relay. relay =", relay._hexed_id)
-
-			// Es wird geprüft ob es eine Aktive verbindung für dieses Relay gibt
-			if !obj._connection[i].HasActiveConnections() {
-				obj._lock.Unlock()
-				return fmt.Errorf("ConnectionManager: relay has no active connections. relay = " + relay.GetHexId())
-			}
-
-			// Das Relay wird aktiviert
-			if err := obj._connection[i]._signal_activated(); err != nil {
-				obj._lock.Unlock()
-				return fmt.Errorf("InitRoutesForRelay: 1:" + err.Error())
-			}
-
-			// Die Routen werden dem Relay zugeordnet
-			if err := obj._connection[i]._add_route_entrys(routes); err != nil {
-				obj._lock.Unlock()
-				return fmt.Errorf("InitRoutesForRelay: 2: " + err.Error())
-			}
-
-			// Die Routen würd das Relay wurden erfolgreich bereitgestellt
-			obj._lock.Unlock()
-			return nil
-		}
-	}
-
-	// Der Threadlock wird freigeben
-	obj._lock.Unlock()
-
-	// Das Relay wird herausgesucht
-	return fmt.Errorf("ConnectionManager: InitRoutesForRelay: no relay found")
-}
-
-// Wird vom Kernel verwendet alle Verbindungen zu schließen
-func (obj *ConnectionManager) ShutdownByKernel() {
-	// Der Threadlock wird ausgeführt
-	obj._lock.Lock()
-
-	// Es wird allen Relays Signalisiert dass sie all ihre Verbindungen schließen sollen
-	relist := obj._connection
-
-	// Der Threadlock wird freigeben
-	obj._lock.Unlock()
-
-	// Die Verbindungen werden geschlossen
-	for i := range relist {
-		relist[i].kernel_shutdown()
-	}
-
-	// Es wird gewartet bis alle Verbindungen geschlossen wurden
-	for obj.HasActiveConnections() {
-		time.Sleep(1 * time.Millisecond)
-	}
-}
-
-// Erstellt einen neuen Verbindungs Manager
-func newConnectionManager() ConnectionManager {
-	return ConnectionManager{_connection: make([]*connection_io_pair, 0), _lock: new(sync.Mutex)}
+// Erstellt ein neues Connection IO Pair
+func createNewConnectionIoPair(relay *Relay) *connection_io_pair {
+	return &connection_io_pair{_relay: relay, _lock: sync.Mutex{}, _active: false}
 }

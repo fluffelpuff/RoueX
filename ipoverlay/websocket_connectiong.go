@@ -641,6 +641,23 @@ func (obj *WebsocketKernelConnection) CloseByKernel() {
 	}
 }
 
+// Gibt die Aktuelle Ping Zeit zurück
+func (obj *WebsocketKernelConnection) GetPingTime() uint64 {
+	obj._lock.Lock()
+	if len(obj._ping) == 0 {
+		obj._lock.Unlock()
+		return 0
+	}
+	r := obj._ping[len(obj._ping)-1]
+	obj._lock.Unlock()
+	return r
+}
+
+// Gibt die Gesendete und Empfangene Datenmenge zurück
+func (obj *WebsocketKernelConnection) GetTxRxBytes() (uint64, uint64) {
+	return 0, 0
+}
+
 // Erstellt ein neues Kernel Sitzungs Objekt
 func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id string, relay_public_key *btcec.PublicKey, relay_otk_public_key *btcec.PublicKey, relay_otk_ecdh_key_id string, bandwith float64, ping_time uint64) (*WebsocketKernelConnection, error) {
 	// Das Objekt wird erstellt

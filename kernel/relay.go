@@ -43,6 +43,11 @@ func (obj *Relay) GetHexId() string {
 	return obj._hexed_id
 }
 
+// Gibt an ob dem Relay vertraut wird
+func (obj *Relay) IsTrusted() bool {
+	return obj._trusted
+}
+
 // Erstellt ein nicht Vertrauenswürdiges Relay
 func NewUntrustedRelay(public_key *btcec.PublicKey, last_useed int64, end_point string, tpe string) *Relay {
 	log.Println("New temporary untrusted relay created", hex.EncodeToString(public_key.SerializeCompressed()))

@@ -35,6 +35,8 @@ type ClientModule interface {
 // Stellt eine Verbindung dar
 type RelayConnection interface {
 	RegisterKernel(kernel *Kernel) error
+	GetTxRxBytes() (uint64, uint64)
+	GetPingTime() uint64
 	GetProtocol() string
 	GetObjectId() string
 	FinallyInit() error
@@ -54,6 +56,18 @@ type _aes_encrypted_result struct {
 	Cipher []byte `cbor:"1,keyasint"`
 	Nonce  []byte `cbor:"2,keyasint"`
 	Sig    []byte `cbor:"3,keyasint"`
+}
+
+// Stellt die MetaDaten dar
+type RelayConnectionMetaData struct {
+	PublicKey        string
+	TotalConnections uint64
+	IsConnected      bool
+	TotalWrited      uint64
+	TotalReaded      uint64
+	PingMS           uint64
+	BandwithKBs      uint64
+	IsTrusted        bool
 }
 
 // Gibt den Verschlüsselungs Algo an
