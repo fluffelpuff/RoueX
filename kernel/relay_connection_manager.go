@@ -142,7 +142,7 @@ func (obj *ConnectionManager) GetTotalRelayConnections(relay *Relay) uint64 {
 }
 
 // Ruft alle MetaDaten über die Verbindungen eines Relays ab
-func (obj *ConnectionManager) GetAllMetaInformationsOfRelayConnections(relay *Relay) (*RelayConnectionMetaData, error) {
+func (obj *ConnectionManager) GetAllMetaInformationsOfRelayConnections(relay *Relay) (*RelayMetaData, error) {
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
 
@@ -164,7 +164,10 @@ func (obj *ConnectionManager) GetAllMetaInformationsOfRelayConnections(relay *Re
 	}
 
 	// Das Connection MetaData Objekt wird erstellt
-	conn_meta_data := found_object.GetMetaDataInformations()
+	conn_meta_data, err := found_object.GetMetaDataInformations()
+	if err != nil {
+		return nil, fmt.Errorf("GetAllMetaInformationsOfRelayConnections: " + err.Error())
+	}
 
 	// Es wurde keine Aktive Realy Verbinding gefunden
 	return conn_meta_data, nil

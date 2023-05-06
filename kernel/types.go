@@ -36,6 +36,8 @@ type ClientModule interface {
 type RelayConnection interface {
 	RegisterKernel(kernel *Kernel) error
 	GetTxRxBytes() (uint64, uint64)
+	GetSessionPKey() (*btcec.PublicKey, error)
+	GetIOType() ConnectionIoType
 	GetPingTime() uint64
 	GetProtocol() string
 	GetObjectId() string
@@ -58,8 +60,21 @@ type _aes_encrypted_result struct {
 	Sig    []byte `cbor:"3,keyasint"`
 }
 
-// Stellt die MetaDaten dar
+// Stellt die MetaDaten einer einzelnen Verbindung dar
 type RelayConnectionMetaData struct {
+	SessionPKey     string
+	Id              string
+	IsConnected     bool
+	Protocol        string
+	InboundOutbound uint8
+	TxBytes         uint64
+	RxBytes         uint64
+	Ping            uint64
+}
+
+// Stellt die MetaDaten dar
+type RelayMetaData struct {
+	Connections      []RelayConnectionMetaData
 	PublicKey        string
 	TotalConnections uint64
 	IsConnected      bool
@@ -73,6 +88,11 @@ type RelayConnectionMetaData struct {
 // Gibt den Verschlüsselungs Algo an
 type EncryptionAlgo uint8
 
+// Gibt an ob es sich um eine Eingehende oder um eine Ausgehende Verbindung handelt
+type ConnectionIoType uint8
+
 const (
 	CHACHA_2020 = EncryptionAlgo(1)
+	INBOUND     = ConnectionIoType(1)
+	OUTBOUND    = ConnectionIoType(2)
 )

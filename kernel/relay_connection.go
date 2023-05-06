@@ -283,12 +283,28 @@ func (obj *connection_io_pair) GetRxTxBytes() (uint64, uint64) {
 	return tx, rx
 }
 
+// Gibt an wieviele Verbindungen aufgebaut sind
+func (obj *connection_io_pair) GetTotalConnection() uint64 {
+	obj._lock.Lock()
+	r := uint64(len(obj._conn))
+	obj._lock.Unlock()
+	return r
+}
+
+// Ruft alle Verfügabren Verbindungen ab
+func (obj *connection_io_pair) GetConnections() []RelayConnection {
+	obj._lock.Lock()
+	r := []RelayConnection(obj._conn)
+	obj._lock.Unlock()
+	return r
+}
+
 // Gibt die Aktuellen MetaDaten der Verbindung uas
-func (obj *connection_io_pair) GetMetaDataInformations() *RelayConnectionMetaData {
+func (obj *connection_io_pair) GetMetaDataInformations() (*RelayMetaData, error) {
 	// Die Schnelleste Verbindung wird ermittelt
 	best_conn := obj.GetBestConnection()
 	if best_conn == nil {
-		return &RelayConnectionMetaData{
+		return &RelayMetaData{
 			TotalConnections: 0,
 			IsConnected:      false,
 			IsTrusted:        obj._relay._trusted,
@@ -296,38 +312,53 @@ func (obj *connection_io_pair) GetMetaDataInformations() *RelayConnectionMetaDat
 			TotalReaded:      0,
 			PingMS:           0,
 			BandwithKBs:      0,
-		}
+		}, nil
 	}
 
 	// Gibt die Gesendete und Empfange Datenmenge an
 	tx_bytes, rx_bytes := obj.GetRxTxBytes()
 
-	// Gibt an ob es eine Aktive Verbindung gibt
-	if !obj.HasActiveConnections() || !best_conn.IsConnected() {
-		return &RelayConnectionMetaData{
-			IsTrusted:        obj._relay._trusted,
-			TotalWrited:      tx_bytes,
-			TotalReaded:      rx_bytes,
-			IsConnected:      false,
-			TotalConnections: 0,
-			PingMS:           0,
-			BandwithKBs:      0,
+	// Es werden alle Verbindungen abgerufen
+	connection := obj.GetConnections()
+
+	// Die MetaDaten werden abgerufen
+	revals := make([]RelayConnectionMetaData, 0)
+	for i := range connection {
+		rx, tx := connection[i].GetTxRxBytes()
+		pkey, err := connection[i].GetSessionPKey()
+		if err != nil {
+			return nil, err
 		}
+		encoded := hex.EncodeToString(pkey.SerializeCompressed())
+		robj := RelayConnectionMetaData{
+			Id:              connection[i].GetObjectId(),
+			Protocol:        connection[i].GetProtocol(),
+			InboundOutbound: uint8(connection[i].GetIOType()),
+			IsConnected:     connection[i].IsConnected(),
+			SessionPKey:     encoded,
+			RxBytes:         rx,
+			TxBytes:         tx,
+		}
+		if !connection[i].IsConnected() {
+			continue
+		}
+		revals = append(revals, robj)
 	}
 
 	//Erzeugt den Rückgabewert
-	result := &RelayConnectionMetaData{
+	result := &RelayMetaData{
 		PingMS:           best_conn.GetPingTime(),
 		IsTrusted:        obj._relay._trusted,
 		TotalWrited:      tx_bytes,
 		TotalReaded:      rx_bytes,
-		IsConnected:      false,
-		TotalConnections: 0,
+		IsConnected:      best_conn.IsConnected(),
+		TotalConnections: uint64(len(revals)),
+		Connections:      revals,
 		BandwithKBs:      0,
 	}
 
 	// Gibt die Daten zurück
-	return result
+	return result, nil
 }
 
 // Erstellt ein neues Connection IO Pair

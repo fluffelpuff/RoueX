@@ -1,7 +1,6 @@
 package kernel
 
 import (
-	"fmt"
 	"math/rand"
 )
 
@@ -12,7 +11,7 @@ func RandStringRunes(n int) string {
 	for i := range b {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
-	return fmt.Sprintf("@%s", string(b))
+	return string(b)
 }
 
 func randProcId() string {

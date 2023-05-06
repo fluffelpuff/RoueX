@@ -20,10 +20,26 @@ func (obj *Kernel) APIFetchAllRelays() ([]apiclient.ApiRelayEntry, error) {
 
 		// Es wird geprüft ob der Relay verbunden ist
 		if meta_data != nil {
+			// Die Verbindungs Meta Daten werden vorbereitet
+			recons := make([]apiclient.ApiRelayConnection, 0)
+			for i := range meta_data.Connections {
+				recons = append(recons, apiclient.ApiRelayConnection{
+					Id:              meta_data.Connections[i].Id,
+					SessionPkey:     meta_data.Connections[i].SessionPKey,
+					Protocol:        meta_data.Connections[i].Protocol,
+					InboundOutbound: meta_data.Connections[i].InboundOutbound,
+					TxBytes:         meta_data.Connections[i].TxBytes,
+					RxBytes:         meta_data.Connections[i].RxBytes,
+					Ping:            meta_data.Connections[i].Ping,
+				})
+			}
+
+			// Die Daten werden hinzugefügt
 			result_list = append(result_list, apiclient.ApiRelayEntry{
 				Id:                trusted_relays[i]._hexed_id,
 				IsTrusted:         trusted_relays[i].IsTrusted(),
 				PublicKey:         trusted_relays[i].GetPublicKeyHexString(),
+				Connections:       recons,
 				IsConnected:       meta_data.IsConnected,
 				BandwithKBs:       meta_data.BandwithKBs,
 				TotalConnections:  meta_data.TotalConnections,

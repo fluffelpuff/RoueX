@@ -3,38 +3,16 @@
 package main
 
 import (
-	"encoding/base32"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	apiclient "github.com/fluffelpuff/RoueX/api_client"
+	"github.com/fluffelpuff/RoueX/kernel"
 	"github.com/fluffelpuff/RoueX/static"
 	"github.com/fluffelpuff/RoueX/utils"
-	"github.com/olekukonko/tablewriter"
 )
-
-func boolToYesNo(b bool) string {
-	if b {
-		return "yes"
-	}
-	return "no"
-}
-
-func hexToBech32(h string) string {
-	// Hex-String in Byte-Array umwandeln
-	hexBytes, err := hex.DecodeString(h)
-	if err != nil {
-		panic(err)
-	}
-
-	// Byte-Array in base32-String ohne Padding umwandeln
-	base32Str := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hexBytes)
-	return strings.ToLower(base32Str)
-}
 
 // Wird verwendet um alle Verfügbaren Relays abzurufen
 func listRelays(list_all_relays bool) error {
@@ -53,29 +31,47 @@ func listRelays(list_all_relays bool) error {
 		panic(err)
 	}
 
-	data := [][]string{}
-	for i := range result {
-		new_elm := []string{
-			utils.ConvertHexStringToAddress(result[i].PublicKey),
-			strconv.FormatUint(result[i].BandwithKBs, 10),
-			strconv.FormatUint(result[i].TotalBytesSend, 10),
-			strconv.FormatUint(result[i].TotalBytesRecived, 10),
-			strconv.FormatUint(result[i].PingMS, 10),
-			boolToYesNo(result[i].IsTrusted),
-			boolToYesNo(result[i].IsConnected),
+	// Print interface details
+	for _, iface := range result {
+		// Speichert alle Optionen ab
+		var options []string
+
+		// Es wird geprüft ob eine Verbindung besteht
+		if iface.IsConnected {
+			options = append(options, "CONNECTED")
+		} else {
+			options = append(options, "DISCONNECTED")
 		}
-		data = append(data, new_elm)
+
+		// Prüft ob der Verbindung vertraut wird
+		if iface.IsTrusted {
+			options = append(options, "TRUSTED")
+		} else {
+			options = append(options, "UNTRUSTED")
+		}
+
+		// Erstellt den Ausagbe String aus den Optionen
+		joinedFlags := strings.Join(options, ",")
+
+		// Erzeugt die ausgabe
+		fmt.Printf("%s: <%s>\n", iface.Id, joinedFlags)
+		fmt.Printf("\tpublic key: %s\n", utils.ConvertHexStringToAddress(iface.PublicKey))
+		for _, connection := range iface.Connections {
+			if kernel.ConnectionIoType(connection.InboundOutbound) == kernel.INBOUND {
+				fmt.Printf("\tin: spkey = %s, protocol = %s, ping = %d ms, tx = %d bytes, rx = %d bytes\n", connection.Id, connection.Protocol, connection.Ping, connection.TxBytes, connection.RxBytes)
+			} else if kernel.ConnectionIoType(connection.InboundOutbound) == kernel.OUTBOUND {
+				fmt.Printf("\tout: spkey = %s, protocol = %s, ping = %d ms, tx = %d bytes, rx = %d bytes\n", connection.Id, connection.Protocol, connection.Ping, connection.TxBytes, connection.RxBytes)
+			} else {
+				continue
+			}
+		}
+		fmt.Printf("\ttotal bytes recived: %d\n", iface.TotalBytesRecived)
+		fmt.Printf("\ttotal bytes send: %d\n", iface.TotalBytesSend)
+		fmt.Printf("\ttotal connections: %d\n", iface.TotalConnections)
+		fmt.Printf("\tping (ms): %d\n", iface.PingMS)
 	}
 
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Public-Key / ID", "Bandwith (kb/s)", "TX (bytes)", "RX (bytes)", "Ping (ms)", "Trusted", "Connected"})
-
-	for _, v := range data {
-		table.Append(v)
-	}
-
-	table.Render()
-
+	// Der Vorgang wurde ohne fehler durchgeführt
 	return nil
 }
 

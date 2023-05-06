@@ -31,6 +31,9 @@ type WebsocketKernelConnection struct {
 	_dest_relay_public_key *btcec.PublicKey
 	_lock                  *sync.Mutex
 	_write_lock            *sync.Mutex
+	_io_type               kernel.ConnectionIoType
+	_rx_bytes              uint64
+	_tx_bytes              uint64
 }
 
 // Registriert einen Kernel in der Verbindung
@@ -373,6 +376,11 @@ func (obj *WebsocketKernelConnection) _thread_reader(rewolf chan string) {
 			break
 		}
 
+		// Die Bytes werden zugeordnert
+		obj._lock.Lock()
+		obj._rx_bytes += uint64(len(message))
+		obj._lock.Unlock()
+
 		// Überprüfen Sie, ob der Nachrichtentyp "binary" ist
 		if messageType != websocket.BinaryMessage {
 			continue
@@ -505,12 +513,19 @@ func (obj *WebsocketKernelConnection) _write_ws_package(data []byte, tpe Transpo
 		return err
 	}
 
-	// Das fertige Paket wird übertragen, hierfür wird der IO-Lock verwendet
+	// Der Threadlock wird verwendet
 	obj._write_lock.Lock()
+
+	// Das fertige Paket wird übertragen, hierfür wird der IO-Lock verwendet
 	if err := obj._conn.WriteMessage(websocket.BinaryMessage, final_encrypted); err != nil {
 		obj._write_lock.Unlock()
 		return err
 	}
+
+	// Die gesendeten Bytes werden hinzugerechnet
+	obj._tx_bytes += uint64(len(final_encrypted))
+
+	// Der Threadlock wird freigegeben
 	obj._write_lock.Unlock()
 
 	// Der Vorgang wurde ohne Fehler erfolgreich druchgeführt
@@ -655,11 +670,28 @@ func (obj *WebsocketKernelConnection) GetPingTime() uint64 {
 
 // Gibt die Gesendete und Empfangene Datenmenge zurück
 func (obj *WebsocketKernelConnection) GetTxRxBytes() (uint64, uint64) {
-	return 0, 0
+	obj._lock.Lock()
+	r, t := obj._rx_bytes, obj._tx_bytes
+	obj._lock.Unlock()
+	return r, t
+}
+
+// Gibt an ob es sich um eine ein oder ausgehende Verbindung handelt
+func (obj *WebsocketKernelConnection) GetIOType() kernel.ConnectionIoType {
+	obj._lock.Lock()
+	r := obj._io_type
+	obj._lock.Unlock()
+	return r
+}
+
+// Gibt den Öffentlichen Sitzungsschlüssel zurück
+func (obj *WebsocketKernelConnection) GetSessionPKey() (*btcec.PublicKey, error) {
+	r, err := obj._kernel.GetPublicTempKeyById(obj._local_otk_key_pair)
+	return r, err
 }
 
 // Erstellt ein neues Kernel Sitzungs Objekt
-func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id string, relay_public_key *btcec.PublicKey, relay_otk_public_key *btcec.PublicKey, relay_otk_ecdh_key_id string, bandwith float64, ping_time uint64) (*WebsocketKernelConnection, error) {
+func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id string, relay_public_key *btcec.PublicKey, relay_otk_public_key *btcec.PublicKey, relay_otk_ecdh_key_id string, bandwith float64, ping_time uint64, io_type kernel.ConnectionIoType) (*WebsocketKernelConnection, error) {
 	// Das Objekt wird erstellt
 	wkcobj := &WebsocketKernelConnection{
 		_object_id:             kernel.RandStringRunes(12),
@@ -670,6 +702,7 @@ func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id s
 		_otk_ecdh_key_id:       relay_otk_ecdh_key_id,
 		_ping:                  []uint64{ping_time},
 		_bandwith:              []float64{bandwith},
+		_io_type:               io_type,
 		_conn:                  conn,
 		_signal_shutdown:       false,
 	}
