@@ -16,25 +16,27 @@ import (
 
 // Stellt eine Websocket Verbindung dar
 type WebsocketKernelConnection struct {
-	_object_id             string
-	_local_otk_key_pair    string
-	_total_reader_threads  uint8
-	_is_finally            bool
-	_signal_shutdown       bool
-	_ping                  []uint64
-	_bandwith              []float64
-	_otk_ecdh_key_id       string
-	_is_connected          bool
-	_destroyed             bool
-	_ping_processes        []*PingProcess
-	_conn                  *websocket.Conn
-	_kernel                *kernel.Kernel
-	_dest_relay_public_key *btcec.PublicKey
-	_lock                  *sync.Mutex
-	_write_lock            *sync.Mutex
-	_io_type               kernel.ConnectionIoType
-	_rx_bytes              uint64
-	_tx_bytes              uint64
+	_object_id               string
+	_local_otk_key_pair      string
+	_total_reader_threads    uint8
+	_total_ping_pong_threads uint8
+	_is_finally              bool
+	_signal_shutdown         bool
+	_disconnected            bool
+	_ping                    []uint64
+	_bandwith                []float64
+	_otk_ecdh_key_id         string
+	_is_connected            bool
+	_destroyed               bool
+	_ping_processes          []*PingProcess
+	_conn                    *websocket.Conn
+	_kernel                  *kernel.Kernel
+	_dest_relay_public_key   *btcec.PublicKey
+	_lock                    *sync.Mutex
+	_write_lock              *sync.Mutex
+	_io_type                 kernel.ConnectionIoType
+	_rx_bytes                uint64
+	_tx_bytes                uint64
 }
 
 // Registriert einen Kernel in der Verbindung
@@ -85,8 +87,9 @@ func (obj *WebsocketKernelConnection) _destroy_disconnected() {
 func (obj *WebsocketKernelConnection) _loop_bckg_run() bool {
 	obj._lock.Lock()
 	r := obj._signal_shutdown
+	t := obj._disconnected
 	obj._lock.Unlock()
-	return !r
+	return !r && !t
 }
 
 // Wird ausgeführt um eine neue Pingzeit hinzuzufügen
@@ -207,6 +210,11 @@ func (obj *WebsocketKernelConnection) __ping_auto_thread_pong() {
 	// Log
 	log.Println("WebsocketKernelConnection: connection ping pong thread started. connection =", obj._object_id)
 
+	// Signalisiert dass ein Ping Pong Thread vorhanden ist
+	obj._lock.Lock()
+	obj._total_ping_pong_threads++
+	obj._lock.Unlock()
+
 	// Wird solange ausgeführt, solange die Verbindung verbunden ist
 	for obj._loop_bckg_run() {
 		// Zeitdauer seit last_ping messen
@@ -244,6 +252,11 @@ func (obj *WebsocketKernelConnection) __ping_auto_thread_pong() {
 			time.Sleep(1 * time.Millisecond)
 		}
 	}
+
+	// Signalisiert dass ein Ping Pong Thread geschlossen wurde
+	obj._lock.Lock()
+	obj._total_ping_pong_threads--
+	obj._lock.Unlock()
 
 	// Log
 	log.Println("WebsocketKernelConnection: connection ping pong thread stoped. connection =", obj._object_id)
@@ -318,6 +331,27 @@ func (obj *WebsocketKernelConnection) __recived_pong_paket(data []byte) {
 		result._signal_recived_pong()
 	} else {
 		log.Println("WebsocketKernelConnection: pong recived, unkown pong process", hex.EncodeToString(pong_package.PingId))
+	}
+}
+
+// Gibt an, wieviele Ping Ping Processes vorhanden sind
+func (obj *WebsocketKernelConnection) _ping_ponger_is_open() bool {
+	obj._lock.Lock()
+	r := obj._total_ping_pong_threads
+	obj._lock.Unlock()
+	return r > 0
+}
+
+// Signalisiert dass die Verbindung gerennt wurde
+func (obj *WebsocketKernelConnection) _signal_disconnect() {
+	// Signalisiert dass die Verbindung getrennt wurde
+	obj._lock.Lock()
+	obj._disconnected = true
+	obj._lock.Unlock()
+
+	// Es wird gewartet bis alle Ping Pong Threads geschlossen wurden
+	for obj._ping_ponger_is_open() {
+		time.Sleep(1 * time.Millisecond)
 	}
 }
 
@@ -466,6 +500,9 @@ func (obj *WebsocketKernelConnection) _thread_reader(rewolf chan string) {
 	// Log
 	log.Println("WebsocketKernelConnection: connection closed. connection =", obj._object_id)
 
+	// Signalisiert dass die Verbindung getrennt wurde
+	obj._signal_disconnect()
+
 	// Es wird signalisiert dass keine Verbindung mehr verfügbar ist
 	obj._lock.Lock()
 	obj._total_reader_threads--
@@ -608,8 +645,9 @@ func (obj *WebsocketKernelConnection) IsConnected() bool {
 	r := obj._is_connected
 	t := obj._total_reader_threads
 	s := obj._signal_shutdown
+	x := obj._disconnected
 	obj._lock.Unlock()
-	return r && t == 1 && !s
+	return r && t == 1 && !s && !x
 }
 
 // Schreibt Daten in die Verbindung

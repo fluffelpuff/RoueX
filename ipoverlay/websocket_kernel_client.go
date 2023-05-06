@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -18,12 +19,41 @@ import (
 
 // Stellt eine Websocket Kernel Verbindung dar
 type WebsocketKernelClient struct {
-	_kernel *kernel.Kernel
-	_obj_id string
+	_final_session *WebsocketKernelConnection
+	_lock          sync.Mutex
+	_kernel        *kernel.Kernel
+	_opproc        bool
+	_obj_id        string
 }
 
 // Stellt Proxy Einstellungen für eine Client Verbindung dar
 type WebsocketKernelProxySettings struct {
+}
+
+// Setz den Offennen Versuch zurück
+func (obj *WebsocketKernelClient) _reset_proc() {
+	obj._lock.Lock()
+	obj._opproc = false
+	obj._lock.Unlock()
+}
+
+// Gibt an ob ein Offener Prozess vorhanden ist
+func (obj *WebsocketKernelClient) _has_oproc() bool {
+	obj._lock.Lock()
+	r := obj._opproc
+	obj._lock.Unlock()
+	return r
+}
+
+// Gibt an ob der Client verbunden ist
+func (obj *WebsocketKernelClient) _is_connected() bool {
+	obj._lock.Lock()
+	r := obj._final_session
+	obj._lock.Unlock()
+	if r == nil {
+		return false
+	}
+	return r.IsConnected()
 }
 
 // Registriert den Kernel im Modul
@@ -44,6 +74,14 @@ func (obj *WebsocketKernelClient) GetProtocol() string {
 
 // Stellt eine neue Websocket Verbindung her
 func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.PublicKey, proxy_config *kernel.ProxyConfig) error {
+	// Es wird geprüft ob es derzeit eine Verbindung gibt
+	if obj._has_oproc() {
+		return fmt.Errorf("ConnectTo: always open connecting process")
+	}
+	if obj._is_connected() {
+		return fmt.Errorf("ConnectTo: always connected")
+	}
+
 	// Es wird versucht eine Websocket verbindung aufzubauen
 	var err error
 	var conn *websocket.Conn
@@ -51,6 +89,7 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 		// Set the HTTP proxy to use
 		proxyURL, err := url.Parse(proxy_config.Host)
 		if err != nil {
+			obj._reset_proc()
 			return err
 		}
 
@@ -68,7 +107,8 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 		// Die Verbindung wird aufgebaut
 		conn, _, err = dialer.Dial(url_str, nil)
 		if err != nil {
-			return fmt.Errorf("WebsocketKernelClient: connectToError: " + err.Error())
+			obj._reset_proc()
+			return fmt.Errorf(err.Error())
 		}
 
 		// Log
@@ -80,7 +120,8 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 		// Die Verbindung wird aufgebaut
 		conn, _, err = websocket.DefaultDialer.Dial(url_str, nil)
 		if err != nil {
-			return fmt.Errorf("ConnectTo: 1: " + err.Error())
+			obj._reset_proc()
+			return fmt.Errorf(err.Error())
 		}
 
 		// Log
@@ -90,19 +131,22 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 	// Es wird ein Temporäres Schlüsselpaar erstellt
 	key_pair_id, err := obj._kernel.CreateNewTempKeyPair()
 	if err != nil {
+		obj._reset_proc()
 		return fmt.Errorf("ConnectTo: 5: " + err.Error())
 	}
 
 	// Der Öffentliche Schlüssel wird abgerufen
 	temp_public_key, err := obj._kernel.GetPublicTempKeyById(key_pair_id)
 	if err != nil {
+		obj._reset_proc()
 		return fmt.Errorf("ConnectTo: 2: " + err.Error())
 	}
 
 	// Es wird geprüft ob es sich um einen bekannten Relay handelt
 	relay_pkyobj, err := obj._kernel.GetTrustedRelayByPublicKey(pub_key)
 	if err != nil {
-		fmt.Println(err)
+		obj._reset_proc()
+		log.Println(err)
 		conn.Close()
 		return nil
 	}
@@ -113,12 +157,14 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 	// Der Hash wird mit dem Relay Schlüssel des Aktuellen Relays Signiert
 	relay_signature, err := obj._kernel.SignWithRelayKey(sign_hash)
 	if err != nil {
+		obj._reset_proc()
 		return fmt.Errorf("ConnectTo: 3: " + err.Error())
 	}
 
 	// Der Hash wird mit dem Temprären Schlüssel signiert
 	temp_key_signature, err := obj._kernel.SignWithTempKeyId(key_pair_id, sign_hash)
 	if err != nil {
+		obj._reset_proc()
 		return fmt.Errorf("ConnectTo: 4: " + err.Error())
 	}
 
@@ -137,18 +183,21 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 	// Das Paket wird in Bytes umgewandelt
 	byted, err := cbor.Marshal(plain_client_hello_package, cbor.EncOptions{})
 	if err != nil {
+		obj._reset_proc()
 		return err
 	}
 
 	// Die Daten werden mit dem Öffentlichen Schlüssel der gegenseite verschlüsselt
 	encrypted_package, err := kernel.EncryptECIESPublicKey(pub_key, byted)
 	if err != nil {
+		obj._reset_proc()
 		return fmt.Errorf("ConnectTo: 6: " + err.Error())
 	}
 
 	// Die Daten werden übermittelt
 	send_err := conn.WriteMessage(websocket.BinaryMessage, encrypted_package)
 	if send_err != nil {
+		obj._reset_proc()
 		return err
 	}
 
@@ -159,44 +208,52 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 	// Es wird auf die Antwort gewartet
 	messageType, recived_message, err := conn.ReadMessage()
 	if err != nil {
+		obj._reset_proc()
 		return err
 	}
 
 	// Sollte es sich nicht um eine Binäry Message handelt, wird der Vorgang abgebrochen und die Verbindung wird geschlossen
 	if messageType != websocket.BinaryMessage {
+		obj._reset_proc()
 		return fmt.Errorf("internal error, unkown response from another relay")
 	}
 
 	// Es wird versucht den Datensatz mit dem Private Relay Schlüssel zu entschlüsseln
 	decrypted_message, err := obj._kernel.DecryptWithPrivateRelayKey(recived_message)
 	if err != nil {
+		obj._reset_proc()
 		return err
 	}
 
 	// Es wird versucht die Daten mittels CBOR einzulesen
 	var eshp EncryptedServerHelloPackage
 	if err := cbor.Unmarshal(decrypted_message, &eshp); err != nil {
+		obj._reset_proc()
 		return err
 	}
 
 	// Es wird versucht den Öffentlicher Schlüssel des Servers einzulesen
 	public_server_key, err := kernel.ReadPublicKeyFromByteSlice(eshp.PublicServerKey)
 	if err != nil {
+		obj._reset_proc()
 		return err
 	}
 	public_server_otk, err := kernel.ReadPublicKeyFromByteSlice(eshp.RandServerPKey)
 	if err != nil {
+		obj._reset_proc()
 		return err
 	}
 
 	// Das Reading Timeout wird entfernt
 	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		obj._reset_proc()
 		return err
 	}
 
 	// Es wird ein ECDH Schlüssel für die OTK Schlüssel beider Relays erstellt
 	otk_ecdh_key, err := obj._kernel.CreateOTKECDHKey(key_pair_id, public_server_otk)
 	if err != nil {
+		obj._reset_proc()
 		return err
 	}
 
@@ -209,6 +266,7 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 	// Das Finale Sitzungsobjekt wird erstellt
 	finally_kernel_session, err := createFinallyKernelConnection(conn, key_pair_id, public_server_key, public_server_otk, otk_ecdh_key, bandwith_kbs, uint64(total_ts_time), kernel.OUTBOUND)
 	if err != nil {
+		obj._reset_proc()
 		conn.Close()
 		return err
 	}
@@ -224,6 +282,7 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 
 	// Die Verbindung wird registriert
 	if err := obj._kernel.AddNewConnection(relay_pkyobj, finally_kernel_session); err != nil {
+		obj._reset_proc()
 		conn.Close()
 		return err
 	}
@@ -231,9 +290,16 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 	// Die Verbindung wird final fertigestellt
 	if err := finally_kernel_session.FinallyInit(); err != nil {
 		obj._kernel.RemoveConnection(finally_kernel_session)
+		obj._reset_proc()
 		conn.Close()
 		return err
 	}
+
+	// Das Finale Objekt wird abgespeichert
+	obj._lock.Lock()
+	obj._opproc = false
+	obj._final_session = finally_kernel_session
+	obj._lock.Unlock()
 
 	// Der Gegenseite wird nun der eigene Öffentliche Schlüssel, die Aktuelle Uhrzeit sowie
 	return nil
@@ -249,8 +315,21 @@ func (obj *WebsocketKernelClient) Shutdown() {
 	log.Println("Shutdowing websocket clients")
 }
 
+// Wird verwendet wenn es sich um eine Ausgehende Verbindung handelt
+func (obj *WebsocketKernelClient) Serve() {
+	obj._lock.Lock()
+	if obj._final_session == nil {
+		obj._lock.Unlock()
+		return
+	}
+	obj._lock.Unlock()
+	for obj._final_session.IsConnected() {
+		time.Sleep(1 * time.Millisecond)
+	}
+}
+
 // Erstellt ein neues Websocket Client Modul
 func NewWebsocketClient() *WebsocketKernelClient {
 	rand_id := utils.RandStringRunes(16)
-	return &WebsocketKernelClient{_obj_id: rand_id}
+	return &WebsocketKernelClient{_obj_id: rand_id, _lock: sync.Mutex{}}
 }

@@ -30,6 +30,7 @@ type ClientModule interface {
 	ConnectTo(string, *btcec.PublicKey, *ProxyConfig) error
 	GetProtocol() string
 	Shutdown()
+	Serve()
 }
 
 // Stellt eine Verbindung dar

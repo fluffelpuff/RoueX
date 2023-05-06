@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -35,6 +36,18 @@ type Kernel struct {
 func (obj *Kernel) CleanUp() error {
 	log.Println("Clearing kernel...")
 	return nil
+}
+
+// Wird verwendet um zu Warten
+func (obj *Kernel) Waiter(wms uint64) {
+	ticks := 0
+	for obj.IsRunning() {
+		if ticks >= int(wms) {
+			return
+		}
+		ticks++
+		time.Sleep(1 * time.Millisecond)
+	}
 }
 
 // Gibt an ob der Kernel ausgeführt wird
