@@ -11,6 +11,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/fluffelpuff/RoueX/kernel"
+	"github.com/fluffelpuff/RoueX/utils"
 	"github.com/fxamacker/cbor"
 	"github.com/gorilla/websocket"
 )
@@ -250,6 +251,6 @@ func (obj *WebsocketKernelClient) Shutdown() {
 
 // Erstellt ein neues Websocket Client Modul
 func NewWebsocketClient() *WebsocketKernelClient {
-	rand_id := kernel.RandStringRunes(16)
+	rand_id := utils.RandStringRunes(16)
 	return &WebsocketKernelClient{_obj_id: rand_id}
 }

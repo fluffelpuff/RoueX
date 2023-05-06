@@ -10,6 +10,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/fluffelpuff/RoueX/kernel"
+	"github.com/fluffelpuff/RoueX/utils"
 	"github.com/gorilla/websocket"
 )
 
@@ -694,7 +695,7 @@ func (obj *WebsocketKernelConnection) GetSessionPKey() (*btcec.PublicKey, error)
 func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id string, relay_public_key *btcec.PublicKey, relay_otk_public_key *btcec.PublicKey, relay_otk_ecdh_key_id string, bandwith float64, ping_time uint64, io_type kernel.ConnectionIoType) (*WebsocketKernelConnection, error) {
 	// Das Objekt wird erstellt
 	wkcobj := &WebsocketKernelConnection{
-		_object_id:             kernel.RandStringRunes(12),
+		_object_id:             utils.RandStringRunes(12),
 		_local_otk_key_pair:    local_otk_key_pair_id,
 		_dest_relay_public_key: relay_public_key,
 		_write_lock:            new(sync.Mutex),

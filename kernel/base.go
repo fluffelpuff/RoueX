@@ -8,6 +8,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/fluffelpuff/RoueX/static"
+	"github.com/fluffelpuff/RoueX/utils"
 )
 
 // Stellt das Kernel Objekt dar
@@ -22,7 +23,7 @@ type Kernel struct {
 	_trusted_relays        *TrustedRelays
 	_server_modules        []*ServerModule
 	_client_modules        []*ClientModule
-	_connection_manager    ConnectionManager
+	_connection_manager    RelayConnectionRoutingTable
 	_firewall              *Firewall
 	_private_key           *btcec.PrivateKey
 	_api_interfaces        []*KernelAPI
@@ -92,10 +93,10 @@ func CreateOSXKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 	}
 
 	// Die KernelID wird estellt
-	k_id := RandStringRunes(16)
+	k_id := utils.RandStringRunes(16)
 
 	// Die Verbindungsverwaltung wird erstellt
-	conn_manager := newConnectionManager()
+	conn_manager := newRelayConnectionRoutingTable()
 
 	// Erstellt das Kernel Objekt
 	new_kernel := Kernel{

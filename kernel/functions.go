@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/fluffelpuff/RoueX/utils"
 )
 
 // Fügt einen Lokalen Server Endpunkt hinzu
@@ -125,7 +126,7 @@ func (obj *Kernel) GetPublicKey() *btcec.PublicKey {
 
 // Erstellt ein neues Schlüsselpaar, der Zugriff auf den Privaten Schlüssel ist nicht möglich
 func (obj *Kernel) CreateNewTempKeyPair() (string, error) {
-	rid := randProcId()
+	rid := utils.RandProcId()
 	priv_k, err := GeneratePrivateKey()
 	if err != nil {
 		return "", err
@@ -190,7 +191,7 @@ func (obj *Kernel) CreateOTKECDHKey(otk_id string, dest_pkey *btcec.PublicKey) (
 		return found_id, nil
 	}
 
-	rand_id := RandStringRunes(12)
+	rand_id := utils.RandStringRunes(12)
 	obj._temp_ecdh_keys[rand_id] = shared_secret
 	obj._lock.Unlock()
 

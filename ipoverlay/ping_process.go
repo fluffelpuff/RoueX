@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fluffelpuff/RoueX/kernel"
+	"github.com/fluffelpuff/RoueX/utils"
 )
 
 type PingResult struct {
@@ -75,7 +75,7 @@ func newPingProcess() (*PingProcess, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := &PingProcess{ProcessId: randomBytes, ResultChannel: make(chan PingResult), CreatedAt: time.Now(), ObjectId: kernel.RandStringRunes(16), _lock: new(sync.Mutex)}
+	r := &PingProcess{ProcessId: randomBytes, ResultChannel: make(chan PingResult), CreatedAt: time.Now(), ObjectId: utils.RandStringRunes(16), _lock: new(sync.Mutex)}
 	log.Println("PingProcess: created new process. pingid =", hex.EncodeToString(randomBytes))
 	return r, nil
 }

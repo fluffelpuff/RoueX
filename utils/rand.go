@@ -1,4 +1,4 @@
-package kernel
+package utils
 
 import (
 	"math/rand"
@@ -14,7 +14,7 @@ func RandStringRunes(n int) string {
 	return string(b)
 }
 
-func randProcId() string {
+func RandProcId() string {
 	b := make([]rune, 16)
 	for i := range b {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]

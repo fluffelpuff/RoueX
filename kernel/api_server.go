@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fluffelpuff/RoueX/static"
+	"github.com/fluffelpuff/RoueX/utils"
 )
 
 type KernelAPI struct {
@@ -136,7 +137,7 @@ func newKernelAPI(_socket_path string) (*KernelAPI, error) {
 	}
 
 	// Es wird eine ObjektId erstellt
-	obj_id := RandStringRunes(12)
+	obj_id := utils.RandStringRunes(12)
 
 	// Log
 	log.Println("KernelAPI: new api created. id =", obj_id, ", path =", _socket_path)

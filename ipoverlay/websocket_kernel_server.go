@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fluffelpuff/RoueX/kernel"
+	"github.com/fluffelpuff/RoueX/utils"
 	"github.com/fxamacker/cbor"
 	"github.com/gorilla/websocket"
 )
@@ -310,7 +311,7 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 // Erstellt einen neuen Lokalen Websocket Server
 func CreateNewLocalWebsocketServerEP(ip_adr string, port uint64) (*WebsocketKernelServerEP, error) {
 	// Die Einmalige ObjektID wird erstellt
-	rand_id := kernel.RandStringRunes(16)
+	rand_id := utils.RandStringRunes(16)
 
 	// Das Objekt wird vorbereitet
 	result_obj := &WebsocketKernelServerEP{_obj_id: rand_id, _lock: new(sync.Mutex)}
