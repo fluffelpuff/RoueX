@@ -20,5 +20,5 @@
 # Go workspace file
 go.work
 RoueX
-build/
+.DS_Store
 cli
