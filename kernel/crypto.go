@@ -16,6 +16,21 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+// Überträgt Verschlüsselte Daten
+type _aes_encrypted_result struct {
+	Cipher []byte `cbor:"1,keyasint"`
+	Nonce  []byte `cbor:"2,keyasint"`
+	Sig    []byte `cbor:"3,keyasint"`
+}
+
+// Gibt den Verschlüsselungs Algo an
+type EncryptionAlgo uint8
+
+// Definiert alle Algos
+const (
+	CHACHA_2020 = EncryptionAlgo(1)
+)
+
 // Wird verwendet um einen SHA3_256 Hash zu erstellen
 func ComputeSha3256Hash(data ...[]byte) []byte {
 	// Verkette die übergebenen Byte-Slices zu einem einzelnen Byte-Slice

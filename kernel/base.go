@@ -105,7 +105,7 @@ func CreateUnixKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 	}
 
 	// Die Kernel API wird gestartet
-	kernel_api, err := newKernelAPI(static.GetFilePathFor(static.API_SOCKET))
+	kernel_api, err := newKernelAPI(static.GetFilePathFor(static.API_SOCKET), static.GetFilePathFor(static.CHANNEL_PATH))
 	if err != nil {
 		panic(err)
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/fluffelpuff/RoueX/ipoverlay"
 	"github.com/fluffelpuff/RoueX/kernel"
+	kernelprotocols "github.com/fluffelpuff/RoueX/kernel_adrl_protocols"
 	"github.com/fluffelpuff/RoueX/keystore"
 )
 
@@ -40,13 +41,19 @@ func main() {
 		panic(err)
 	}
 
+	// Das Ping Pong Layer 2 Protkoll wird Registriert
+	layer_two_ping_pong := kernelprotocols.NEW_ROUEX_PING_PONG_PROTOCOL_HANDLER()
+	if err := kernel_object.RegisterNewPackageTypeFunction(0, layer_two_ping_pong); err != nil {
+		panic(err)
+	}
+
 	// Es wird ein Lokaler Websocket Server erezugt
 	local_ws, err := ipoverlay.CreateNewLocalWebsocketServerEP("", 9381)
 	if err != nil {
 		panic(err)
 	}
 
-	// Der Websocket Client wird ersteltlt
+	// Der Websocket Client Hadnler wird ersteltlt
 	ws_client_module := ipoverlay.NewWebsocketClient()
 
 	// Der Lokale Websocket Server Endpunkt wird hinzugefügt

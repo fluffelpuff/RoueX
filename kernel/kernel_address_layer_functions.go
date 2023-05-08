@@ -34,20 +34,26 @@ func (obj *Kernel) RegisterNewPackageTypeFunction(tpe uint8, pckgtf PackageTypeF
 		}
 	}
 
-	// Sollte kein passender Typ gefunden werden, wird der Vorgang abegbrochen
-	if has_found == nil {
+	// Sollte ein passender Wert vorhanden sein, wird der Vorgang abgebrochen
+	if has_found != nil {
 		obj._lock.Unlock()
 		return fmt.Errorf("RegisterNewPackageTypeFunction: 2: type always registred")
 	}
 
 	// Das Objekt wird registriert
-	obj._adr_layer_feps = append(obj._adr_layer_feps, &kernel_package_type_function_entry{Tpe: tpe, Ptf: pckgtf})
+	nwo := &kernel_package_type_function_entry{Tpe: tpe, Ptf: pckgtf}
+	obj._adr_layer_feps = append(obj._adr_layer_feps, nwo)
 
 	// Der Threadlock wird freigegeben
 	obj._lock.Unlock()
 
+	// Der Kernel wird im Objekt registriert
+	if err := nwo.Ptf.RegisterKernel(obj); err != nil {
+		return fmt.Errorf("RegisterNewPackageTypeFunction: 3: " + err.Error())
+	}
+
 	// Log
-	log.Println("Kernel: new package type handle function registrated. kernel =", obj.GetKernelID(), " type =", tpe)
+	log.Println("Kernel: new package type handle function registrated. kernel =", obj.GetKernelID(), "type =", tpe, "name =", pckgtf.GetProtocolName(), "object-id =", pckgtf.GetObjectId())
 
 	// Der Vorgang wurde ohne Fehler durchgeführt
 	return nil
@@ -111,7 +117,7 @@ func (obj *Kernel) EnterLocallyPackage(pckge *AddressLayerPackage, conn RelayCon
 	}
 
 	// Das Paket wird an den Handler übergeben
-	err = register_package_type_handler.EnterRecivedPackage(pckge.Body, pckge, conn)
+	err = register_package_type_handler.EnterRecivedPackage(pckge, conn)
 	if err != nil {
 		return fmt.Errorf("EnterLocallyPackage: 5: " + err.Error())
 	}

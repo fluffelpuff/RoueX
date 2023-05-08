@@ -56,15 +56,10 @@ type ExternalModule interface {
 
 // Gibt die Registrierte Paketfunktion an
 type PackageTypeFunction interface {
-	EnterRecivedPackage([]byte, *AddressLayerPackage, RelayConnection) error
-	RegisterKernel(kernel *Kernel)
-}
-
-// Überträgt Verschlüsselte Daten
-type _aes_encrypted_result struct {
-	Cipher []byte `cbor:"1,keyasint"`
-	Nonce  []byte `cbor:"2,keyasint"`
-	Sig    []byte `cbor:"3,keyasint"`
+	EnterRecivedPackage(*AddressLayerPackage, RelayConnection) error
+	RegisterKernel(kernel *Kernel) error
+	GetProtocolName() string
+	GetObjectId() string
 }
 
 // Stellt die MetaDaten einer einzelnen Verbindung dar
@@ -92,14 +87,11 @@ type RelayMetaData struct {
 	IsTrusted        bool
 }
 
-// Gibt den Verschlüsselungs Algo an
-type EncryptionAlgo uint8
-
 // Gibt an ob es sich um eine Eingehende oder um eine Ausgehende Verbindung handelt
 type ConnectionIoType uint8
 
+// Definiert ein oder ausgehende Verbindungestypen
 const (
-	CHACHA_2020 = EncryptionAlgo(1)
-	INBOUND     = ConnectionIoType(1)
-	OUTBOUND    = ConnectionIoType(2)
+	INBOUND  = ConnectionIoType(1)
+	OUTBOUND = ConnectionIoType(2)
 )

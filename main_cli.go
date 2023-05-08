@@ -10,14 +10,13 @@ import (
 
 	apiclient "github.com/fluffelpuff/RoueX/api_client"
 	"github.com/fluffelpuff/RoueX/kernel"
-	"github.com/fluffelpuff/RoueX/static"
 	"github.com/fluffelpuff/RoueX/utils"
 )
 
 // Wird verwendet um alle Verfügbaren Relays abzurufen
 func listRelays(list_all_relays bool) error {
 	// Die API Verbindung wird aufgebaut
-	api, err := apiclient.LoadAPI(static.GetFilePathFor(static.API_SOCKET))
+	api, err := apiclient.LoadAPI()
 	if err != nil {
 		return err
 	}
@@ -75,13 +74,36 @@ func listRelays(list_all_relays bool) error {
 	return nil
 }
 
+// Es wird ein Ping vorgang gestartet
+func pingRelayAddress(relay_address string) error {
+	// Die API Verbindung wird aufgebaut
+	api, err := apiclient.LoadAPI()
+	if err != nil {
+		return err
+	}
+
+	// Schließt die Verbindug am ende
+	defer api.Close()
+
+	// Es wird geprüf ob auch alle Offline Relays abgerufen werden sollen
+	_, err = api.FetchAllRelays()
+	if err != nil {
+		panic(err)
+	}
+
+	// Der Vorgang wurde ohne fehler durchgeführt
+	return nil
+}
+
 func main() {
 	// Definiert alle Verwendeten werte
+	var pingArg string
 	var list_relays bool
 	list_offline_relays := true
 
 	// Definiert alle Parameter
 	flag.BoolVar(&list_relays, "list-relays", false, "")
+	flag.StringVar(&pingArg, "ping", "", "description of ping flag")
 	flag.BoolVar(&list_offline_relays, "all", false, "A boolean flag")
 
 	flag.Usage = func() {
@@ -96,6 +118,10 @@ func main() {
 	// Es wird geprüft welche Option aktiviert wurde
 	if list_relays {
 		if err := listRelays(list_offline_relays); err != nil {
+			panic(err)
+		}
+	} else if len(pingArg) != 0 {
+		if err := pingRelayAddress(pingArg); err != nil {
 			panic(err)
 		}
 	} else {

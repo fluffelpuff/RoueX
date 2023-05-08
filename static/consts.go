@@ -5,6 +5,7 @@ const (
 	// macOS Dateipfade
 	OSX_BASE_CONFIG_PATH       = "/Users/fluffelbuff/Desktop/rouex.config"
 	OSX_NO_ROOT_API_SOCKET     = "/Users/fluffelbuff/Desktop/rouex.socket"
+	OSX_NO_ROOT_CHANNEL_SOCKET = "/Users/fluffelbuff/Desktop/rouex_channel.socket"
 	OSX_TRUSTED_RELAYS_PATH    = "/Users/fluffelbuff/Desktop/trusted_relays.table"
 	OSX_ROUTING_TABLE_PATH     = "/Users/fluffelbuff/Desktop/routing.table"
 	OSX_FIREWALL_TABLE_PATH    = "/Users/fluffelbuff/Desktop/firewall.table"
@@ -14,6 +15,7 @@ const (
 	// Linux Debian Dateipfade
 	DEBIAN_BASE_CONFIG_PATH       = "/Users/fluffelbuff/Desktop/rouex.config"
 	DEBIAN_NO_ROOT_API_SOCKET     = "/Users/fluffelbuff/Desktop/rouex.socket"
+	DEBIAN_NO_ROOT_CHANNEL_SOCKET = "/Users/fluffelbuff/Desktop/rouex_channel.socket"
 	DEBIAN_TRUSTED_RELAYS_PATH    = "/Users/fluffelbuff/Desktop/trusted_relays.table"
 	DEBIAN_ROUTING_TABLE_PATH     = "/Users/fluffelbuff/Desktop/routing.table"
 	DEBIAN_FIREWALL_TABLE_PATH    = "/Users/fluffelbuff/Desktop/firewall.table"
@@ -23,6 +25,7 @@ const (
 	// FreeBSD Dateipfade
 	FREEBSD_BASE_CONFIG_PATH       = "/Users/fluffelbuff/Desktop/rouex.config"
 	FREEBSD_NO_ROOT_API_SOCKET     = "/Users/fluffelbuff/Desktop/rouex.socket"
+	FREEBSD_NO_ROOT_CHANNEL_SOCKET = "/Users/fluffelbuff/Desktop/rouex_channel.socket"
 	FREEBSD_TRUSTED_RELAYS_PATH    = "/Users/fluffelbuff/Desktop/trusted_relays.table"
 	FREEBSD_ROUTING_TABLE_PATH     = "/Users/fluffelbuff/Desktop/routing.table"
 	FREEBSD_FIREWALL_TABLE_PATH    = "/Users/fluffelbuff/Desktop/firewall.table"
@@ -32,6 +35,7 @@ const (
 	// Windows Dateipfade
 	WIN32_BASE_CONFIG_PATH       = "/Users/fluffelbuff/Desktop/rouex.config"
 	WIN32_NO_ROOT_API_SOCKET     = "/Users/fluffelbuff/Desktop/rouex.socket"
+	WIN32_ROOT_CHANNEL_SOCKET    = "/Users/fluffelbuff/Desktop/rouex_channel.socket"
 	WIN32_TRUSTED_RELAYS_PATH    = "/Users/fluffelbuff/Desktop/trusted_relays.table"
 	WIN32_ROUTING_TABLE_PATH     = "/Users/fluffelbuff/Desktop/routing.table"
 	WIN32_FIREWALL_TABLE_PATH    = "/Users/fluffelbuff/Desktop/firewall.table"
@@ -41,6 +45,7 @@ const (
 	// Raspi-Pi Dateipfade
 	RASPI_PI_BASE_CONFIG_PATH       = "/Users/fluffelbuff/Desktop/rouex.config"
 	RASPI_PI_NO_ROOT_API_SOCKET     = "/Users/fluffelbuff/Desktop/rouex.socket"
+	RASPI_PI_NO_ROOT_CHANNEL_SOCKET = "/Users/fluffelbuff/Desktop/rouex_channel.socket"
 	RASPI_PI_TRUSTED_RELAYS_PATH    = "/Users/fluffelbuff/Desktop/trusted_relays.table"
 	RASPI_PI_ROUTING_TABLE_PATH     = "/Users/fluffelbuff/Desktop/routing.table"
 	RASPI_PI_FIREWALL_TABLE_PATH    = "/Users/fluffelbuff/Desktop/firewall.table"
@@ -50,6 +55,7 @@ const (
 	// Windows Server Dateipfade
 	WIN32_SERVER_BASE_CONFIG_PATH       = "/Users/fluffelbuff/Desktop/rouex.config"
 	WIN32_SERVER_NO_ROOT_API_SOCKET     = "/Users/fluffelbuff/Desktop/rouex.socket"
+	WIN32_SERVER_NO_ROOT_CHANNEL_SOCKET = "/Users/fluffelbuff/Desktop/rouex_channel.socket"
 	WIN32_SERVER_TRUSTED_RELAYS_PATH    = "/Users/fluffelbuff/Desktop/trusted_relays.table"
 	WIN32_SERVER_ROUTING_TABLE_PATH     = "/Users/fluffelbuff/Desktop/routing.table"
 	WIN32_SERVER_FIREWALL_TABLE_PATH    = "/Users/fluffelbuff/Desktop/firewall.table"
@@ -75,4 +81,5 @@ const (
 	FIREWALL_TABLE   = File(4)
 	EXTERNAL_MODULES = File(5)
 	PRIVATE_KEY_FILE = File(6)
+	CHANNEL_PATH     = File(7)
 )
