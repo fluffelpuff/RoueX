@@ -20,6 +20,7 @@ type EncryptedServerHelloPackage struct {
 	RandServerPKeySig []byte `cbor:"11,keyasint"`
 }
 
+// Verschlüssltes Transportpaket
 type EncryptedTransportPackage struct {
 	SourceRelay      []byte               `cbor:"1,keyasint"`
 	DestinationRelay []byte               `cbor:"2,keyasint"`
@@ -43,6 +44,7 @@ func readEncryptedTransportPackageFromBytes(d_bytes []byte) (*EncryptedTransport
 	return &v, nil
 }
 
+// Websocket Transportpaket
 type WSTransportPaket struct {
 	Signature []byte `cbor:"1,keyasint"`
 	Body      []byte `cbor:"2,keyasint"`
@@ -68,6 +70,7 @@ func readWSTransportPaketFromBytes(d_bytes []byte) (*WSTransportPaket, error) {
 	return &v, nil
 }
 
+// Ping Paket
 type PingPackage struct {
 	PingId []byte `cbor:"1,keyasint"`
 }
@@ -88,6 +91,7 @@ func readPingPackageFromBytes(d_bytes []byte) (*PingPackage, error) {
 	return &v, nil
 }
 
+// Pong Paket
 type PongPackage struct {
 	PingId []byte `cbor:"1,keyasint"`
 }

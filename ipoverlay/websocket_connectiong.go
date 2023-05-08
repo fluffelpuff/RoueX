@@ -153,6 +153,33 @@ func (obj *WebsocketKernelConnection) _remove_ping_session(psession *PingProcess
 	obj._lock.Unlock()
 }
 
+// Nimmt eintreffende Datenpakete entgegeen
+func (obj *WebsocketKernelConnection) _enter_incomming_data_package(data []byte) {
+	// Es wird geprüft ob das Paket größer als 30 Bytes ist
+	if len(data) < 30 {
+		log.Println("WebsocketKernelConnection: invalid data package recived. connection =", obj._object_id)
+	}
+
+	// Es wird versucht das Package Frame einzulesen
+	readed_package, err := kernel.ReadAddressLayerPackageFrameFromBytes(data)
+	if err != nil {
+		log.Println("WebsocketKernelConnection: error by reading, package droped. error = "+err.Error(), "connection = "+obj._object_id)
+		return
+	}
+
+	// Es wird geprüft ob die Signatur des Paketes korrekt ist
+	if !readed_package.ValidateSignature() {
+		log.Println("WebsocketKernelConnection: invalid sinature, package droped. connection = " + obj._object_id)
+		return
+	}
+
+	// Das Paket wird an den Kernel übergeben
+	if err := obj._kernel.EnterL2Package(readed_package, obj); err != nil {
+		log.Println(err)
+		return
+	}
+}
+
 // Wird verwendet um ein Ping abzusenden und auf das Pong zu warten
 func (obj *WebsocketKernelConnection) _send_ping_and_wait_of_pong() (uint64, error) {
 	// Es wird ein neuer Ping vorgang registriert
@@ -477,6 +504,8 @@ func (obj *WebsocketKernelConnection) _thread_reader(rewolf chan string) {
 			obj.__recived_ping_paket(read_transport_package.Data)
 		} else if read_transport_package.Type == Pong {
 			obj.__recived_pong_paket(read_transport_package.Data)
+		} else if read_transport_package.Type == Data {
+			obj._enter_incomming_data_package(read_transport_package.Data)
 		} else {
 			func_muutx.Lock()
 			has_closed_reader_loop = fmt.Errorf("unkown package type")

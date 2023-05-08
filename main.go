@@ -30,7 +30,7 @@ func main() {
 	fmt.Println("Public relay key:", hex.EncodeToString(pub_key.SerializeCompressed()))
 
 	// Das Passende Systemkernel wird erstellt
-	kernel_object, err := kernel.CreateOSXKernel(priv_key)
+	kernel_object, err := kernel.CreateUnixKernel(priv_key)
 	if err != nil {
 		panic(err)
 	}

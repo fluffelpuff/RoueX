@@ -271,6 +271,46 @@ func (obj *RelayConnectionRoutingTable) ShutdownByKernel() {
 	}
 }
 
+// Nimmt Pakete entgegen und Routet diese zu dem Entsprechenden Host
+func (obj *RelayConnectionRoutingTable) EnterPackageBufferdAndRoute(pckg *AddressLayerPackage) (bool, error) {
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+
+	// Es werden alle Relay Verbindungen durch Iteriert um zu überprüfen ob es verfügbare Relays für diese Route gibt
+	var found_cpair *connection_io_pair
+	for i := range obj._connection {
+		if !obj._connection[i].HasRouteForAddress(&pckg.Reciver) {
+			found_cpair = obj._connection[i]
+			break
+		}
+	}
+
+	// Der Threadlock wird freigegeben
+	obj._lock.Unlock()
+
+	// Sollte keine passende Verbindung gefunden wurden sein, wird das Paket verworfen
+	if found_cpair == nil {
+		return false, nil
+	}
+
+	// Es wird geprüft ob mit dem ausgewählten IO Pair eine Verbindung besteht
+	if !found_cpair.GetBestConnection().IsConnected() {
+		return false, nil
+	}
+
+	// Das Paket wird an die Verbindung übergeben
+	has_active_route_and_send, err := found_cpair.EnterAndForwardAddressLayerPackage(pckg)
+	if err != nil {
+		return false, fmt.Errorf("EnterPackageAndRoute: 1: " + err.Error())
+	}
+	if !has_active_route_and_send {
+		return false, nil
+	}
+
+	// Das Paket wurde erfolgreich an die Verbindung gesendet
+	return false, nil
+}
+
 // Erstellt einen neuen Verbindungs Manager
 func newRelayConnectionRoutingTable() RelayConnectionRoutingTable {
 	return RelayConnectionRoutingTable{_connection: make([]*connection_io_pair, 0), _lock: new(sync.Mutex)}

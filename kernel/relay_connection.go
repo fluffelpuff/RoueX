@@ -6,6 +6,8 @@ import (
 	"log"
 	"sort"
 	"sync"
+
+	"github.com/btcsuite/btcd/btcec/v2"
 )
 
 // Stellt eine Verbindungspaar dar
@@ -359,6 +361,16 @@ func (obj *connection_io_pair) GetMetaDataInformations() (*RelayMetaData, error)
 
 	// Gibt die Daten zurück
 	return result, nil
+}
+
+// Gibt an, ob dieser Relay eine Route für eine bestimmte Adresse hat
+func (obj *connection_io_pair) HasRouteForAddress(pkey *btcec.PublicKey) bool {
+	return false
+}
+
+// Nimmt Pakete entgegen und leitet sie an die beste Verbindung weiter
+func (obj *connection_io_pair) EnterAndForwardAddressLayerPackage(pckg *AddressLayerPackage) (bool, error) {
+	return false, nil
 }
 
 // Erstellt ein neues Connection IO Pair

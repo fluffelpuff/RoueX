@@ -30,9 +30,10 @@ type Kernel struct {
 	_api_interfaces        []*KernelAPI
 	_temp_key_pairs        map[string]*btcec.PrivateKey
 	_temp_ecdh_keys        map[string][]byte
+	_adr_layer_feps        []*kernel_package_type_function_entry
 }
 
-// Wird unter OSX, Linux oder Windows verwendet zum aufräumen
+// Wird unter UNIX, Linux oder Windows verwendet zum aufräumen
 func (obj *Kernel) CleanUp() error {
 	log.Println("Clearing kernel...")
 	return nil
@@ -52,9 +53,8 @@ func (obj *Kernel) Waiter(wms uint64) {
 
 // Gibt an ob der Kernel ausgeführt wird
 func (obj *Kernel) IsRunning() bool {
-	var is_running bool
 	obj._lock.Lock()
-	is_running = obj._is_running
+	is_running := obj._is_running
 	obj._lock.Unlock()
 	return is_running
 }
@@ -73,10 +73,15 @@ func (obj *Kernel) RegisterAPIInterface(api_interace *KernelAPI) error {
 	return nil
 }
 
-// Erstellt einen OSX Kernel
-func CreateOSXKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
+// Gibt an ob es sich um eine Lokale Adresse handelt
+func (obj *Kernel) IsLocallyAddress(pubkey btcec.PublicKey) bool {
+	return false
+}
+
+// Erstellt einen UNIX Kernel
+func CreateUnixKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 	// Log
-	fmt.Println("Creating new RoueX OSX Kernel...")
+	fmt.Println("Creating new RoueX UNIX Kernel...")
 
 	// Es wird eine Liste mit allen Vertrauten Relays abgerufen
 	trusted_relays_obj, err := loadTrustedRelaysTable(static.GetFilePathFor(static.TRUSTED_RELAYS))
@@ -126,6 +131,7 @@ func CreateOSXKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 		_trusted_relays:        &trusted_relays_obj,
 		_api_interfaces:        make([]*KernelAPI, 0),
 		_external_modules_path: static.OSX_EXTERNAL_MODULES,
+		_adr_layer_feps:        []*kernel_package_type_function_entry{},
 	}
 
 	// Die API Schnitstelle wird im Kernel Registriert
@@ -134,6 +140,6 @@ func CreateOSXKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 	}
 
 	// Gibt das Kernelobjekt ohne Fehler zurück
-	log.Println("Kernel: new osx kernel created. id =", k_id)
+	log.Println("Kernel: new unix kernel created. id =", k_id)
 	return &new_kernel, nil
 }

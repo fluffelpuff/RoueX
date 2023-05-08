@@ -55,7 +55,7 @@ func listRelays(list_all_relays bool) error {
 
 		// Erzeugt die ausgabe
 		fmt.Printf("%s: <%s>\n", iface.Id, joinedFlags)
-		fmt.Printf("\tpublic key: %s\n", utils.ConvertHexStringToAddress(iface.PublicKey))
+		fmt.Printf("\trealy pkey: %s\n", utils.ConvertHexStringToAddress(iface.PublicKey))
 		for _, connection := range iface.Connections {
 			if kernel.ConnectionIoType(connection.InboundOutbound) == kernel.INBOUND {
 				fmt.Printf("\tin: spkey = %s, protocol = %s, ping = %d ms, tx = %d bytes, rx = %d bytes\n", connection.Id, connection.Protocol, connection.Ping, connection.TxBytes, connection.RxBytes)

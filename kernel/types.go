@@ -54,6 +54,12 @@ type ExternalModule interface {
 	GetVersion() uint64
 }
 
+// Gibt die Registrierte Paketfunktion an
+type PackageTypeFunction interface {
+	EnterRecivedPackage([]byte, *AddressLayerPackage, RelayConnection) error
+	RegisterKernel(kernel *Kernel)
+}
+
 // Überträgt Verschlüsselte Daten
 type _aes_encrypted_result struct {
 	Cipher []byte `cbor:"1,keyasint"`
