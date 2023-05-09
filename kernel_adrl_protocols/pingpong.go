@@ -5,6 +5,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/fluffelpuff/RoueX/kernel"
 	"github.com/fluffelpuff/RoueX/utils"
 )
@@ -15,12 +16,20 @@ type ROUEX_PING_PONG_PROTOCOL struct {
 	_lock   *sync.Mutex
 }
 
-// Nimmt eingetroffene Pakete entegegen
+// Nimmt eingetroffene Pakete aus dem Netzwerk Entgegen
 func (obj *ROUEX_PING_PONG_PROTOCOL) EnterRecivedPackage(pckage *kernel.AddressLayerPackage, conn kernel.RelayConnection) error {
 	return nil
 }
 
-// Nimmt Datensätze entgegen welche
+// Nimmt Datensätze entgegen und übergibt diese an den Kernel um das Paket entgültig abzusenden
+func (obj *ROUEX_PING_PONG_PROTOCOL) EnterWritableBytesToReciver(data []byte, reciver *btcec.PublicKey) error {
+	return nil
+}
+
+// Nimmt eintreffende Steuer Befehele entgegen
+func (obj *ROUEX_PING_PONG_PROTOCOL) EnterCommandData(data []byte) ([]byte, error) {
+	return nil, nil
+}
 
 // Registriert den Kernel im Protokoll
 func (obj *ROUEX_PING_PONG_PROTOCOL) RegisterKernel(kernel *kernel.Kernel) error {

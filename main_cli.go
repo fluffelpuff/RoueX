@@ -30,6 +30,12 @@ func listRelays(list_all_relays bool) error {
 		panic(err)
 	}
 
+	// Sollten keine Relays vorhanden sein, wird eine Warnung ausgegeben
+	if len(result) < 1 {
+		fmt.Printf("No relays available, you are offline.\n")
+		return nil
+	}
+
 	// Print interface details
 	for _, iface := range result {
 		// Speichert alle Optionen ab

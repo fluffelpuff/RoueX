@@ -365,11 +365,20 @@ func (obj *connection_io_pair) GetMetaDataInformations() (*RelayMetaData, error)
 
 // Gibt an, ob dieser Relay eine Route für eine bestimmte Adresse hat
 func (obj *connection_io_pair) HasRouteForAddress(pkey *btcec.PublicKey) bool {
+	// Es wird geprüft ob es eine Aktive verbindung gibt
+	if !obj.HasActiveConnections() {
+		return false
+	}
+
 	return false
 }
 
 // Nimmt Pakete entgegen und leitet sie an die beste Verbindung weiter
 func (obj *connection_io_pair) EnterAndForwardAddressLayerPackage(pckg *AddressLayerPackage) (bool, error) {
+	// Es wird geprüft ob es eine Aktive verbindung gibt
+	if !obj.HasActiveConnections() {
+		return false, nil
+	}
 	return false, nil
 }
 

@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"fmt"
+	"log"
 
 	apiclient "github.com/fluffelpuff/RoueX/api_client"
 )
@@ -9,7 +10,7 @@ import (
 // Stellt das Kernel API Interface dar
 type Kf struct {
 	_kernel     *Kernel
-	_kernel_api *KernelAPI
+	_process_id string
 }
 
 // Ruft alle Verfügbren Relays ab
@@ -19,6 +20,9 @@ func (s *Kf) FetchRelays(_ apiclient.EmptyArg, reply *[]apiclient.ApiRelayEntry)
 	if err != nil {
 		return fmt.Errorf("FetchAllRelays: " + err.Error())
 	}
+
+	// Log
+	log.Printf("KernelAPI-Session: fetched relays. connection = %s, total = %d\n", s._process_id, len(result))
 
 	// Die Daten werden zurückgegeben
 	*reply = result

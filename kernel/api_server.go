@@ -9,19 +9,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fluffelpuff/RoueX/static"
 	"github.com/fluffelpuff/RoueX/utils"
 )
 
+// Stellt die KernelAPI dar
 type KernelAPI struct {
-	_channel_socket      net.Listener
-	_socket              net.Listener
-	_lock                sync.Mutex
-	_socket_unix_path    string
-	_ch_socket_unix_path string
-	_kernel              *Kernel
-	_is_running          bool
-	_signal_shutdown     bool
-	_object_id           string
+	_socket           net.Listener
+	_lock             sync.Mutex
+	_socket_unix_path string
+	_kernel           *Kernel
+	_is_running       bool
+	_signal_shutdown  bool
+	_object_id        string
 }
 
 // Registriert den Kernel in der API
@@ -50,20 +50,28 @@ func (obj *KernelAPI) _irn() bool {
 	return r
 }
 
-// Wird als Thread ausgeführt um eingehende Channel verbindungen entgegen zu nehmen
-func (obj *KernelAPI) _channel_server_thr(result chan error) {
-	result <- nil
+// Handelt eine neue Verbindung
+func (obj *KernelAPI) _handle_conn(conn net.Conn) {
+	// Der RPC Server wird erstellt
+	rpcServer := rpc.NewServer()
+	process_id := utils.RandStringRunes(16)
+	err := rpcServer.Register(&Kf{_kernel: obj._kernel, _process_id: process_id})
+	if err != nil {
+		panic(err)
+	}
+
+	// Log
+	log.Printf("KernelAPI: new api connection established. connection = %s\n", process_id)
+
+	// Der JSON RPC wird ausgeführt
+	rpcServer.ServeConn(conn)
+
+	// Log
+	log.Printf("KernelAPI: api connection closed. connection = %s\n", process_id)
 }
 
 // Startet das API Interface
 func (obj *KernelAPI) _start_by_kernel() error {
-	// Der RPC Server wird erstellt
-	rpcServer := rpc.NewServer()
-	err := rpcServer.Register(&Kf{_kernel: obj._kernel, _kernel_api: obj})
-	if err != nil {
-		return fmt.Errorf("KernelAPI:_start_by_kernel: " + err.Error())
-	}
-
 	// Der Lokale nicht Root CLI Socket wird erstellt
 	t := make(chan error)
 	go func(err chan error) {
@@ -101,10 +109,7 @@ func (obj *KernelAPI) _start_by_kernel() error {
 			}
 
 			// Startet die Serverseitige verwaltung der Verbindung
-			go func() {
-				log.Println("KernelAPI: new api connection established.")
-				rpcServer.ServeConn(conn)
-			}()
+			go obj._handle_conn(conn)
 		}
 
 		// Es wird Signalisiert dass der Server nicht mehr ausgeführt wird
@@ -121,15 +126,6 @@ func (obj *KernelAPI) _start_by_kernel() error {
 		return fmt.Errorf("KernelAPI: internal error: " + err.Error())
 	}
 
-	// Es wird versucht den Channel Server zu starten
-	c := make(chan error)
-	go obj._channel_server_thr(c)
-
-	// Es wird geprüft ob beim Starten des Channel servers ein Fehler aufgetreten ist
-	if err := <-c; err != nil {
-		return fmt.Errorf("KernelAPI: internal error: " + err.Error())
-	}
-
 	// Log
 	log.Println("KernelAPI: started by kernel. id =", obj._object_id, ", path =", obj._socket_unix_path)
 
@@ -142,18 +138,20 @@ func (obj *KernelAPI) _close_by_kernel() {
 	obj._lock.Lock()
 	obj._signal_shutdown = true
 	obj._socket.Close()
-	obj._channel_socket.Close()
 	obj._lock.Unlock()
 
 	for obj._irn() {
 		time.Sleep(1 * time.Millisecond)
 	}
 
-	log.Println("KernelAPI: closed by kernel. id =", obj._object_id, ", rpc path =", obj._socket_unix_path, "channel path =", obj._ch_socket_unix_path)
+	log.Println("KernelAPI: closed by kernel. id =", obj._object_id, ", rpc path =", obj._socket_unix_path)
 }
 
 // Erstellt eine neue Kernel API
-func newKernelAPI(_rpc_socket_path string, _app_channel_socket_path string) (*KernelAPI, error) {
+func newKernelAPI() (*KernelAPI, error) {
+	// Gibt die
+	_rpc_socket_path := static.GetFilePathFor(static.API_SOCKET)
+
 	// Überprüfen, ob die Datei vorhanden ist
 	delete := true
 	if _, err := os.Stat(_rpc_socket_path); os.IsNotExist(err) {
@@ -165,24 +163,9 @@ func newKernelAPI(_rpc_socket_path string, _app_channel_socket_path string) (*Ke
 			return nil, err
 		}
 	}
-	if _, err := os.Stat(_app_channel_socket_path); os.IsNotExist(err) {
-		delete = false
-	}
-	if delete {
-		err := os.Remove(_app_channel_socket_path)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	// Der Unix Socket wird vorbereitet
 	l, err := net.Listen("unix", _rpc_socket_path)
-	if err != nil {
-		return nil, fmt.Errorf("newKernelAPI: " + err.Error())
-	}
-
-	// Der Unix Socket für die Channels wird erstellt
-	r, err := net.Listen("unix", _app_channel_socket_path)
 	if err != nil {
 		return nil, fmt.Errorf("newKernelAPI: " + err.Error())
 	}
@@ -191,9 +174,9 @@ func newKernelAPI(_rpc_socket_path string, _app_channel_socket_path string) (*Ke
 	obj_id := utils.RandStringRunes(12)
 
 	// Log
-	log.Println("KernelAPI: new api created. id =", obj_id, ", rpc path =", _rpc_socket_path, "channel path =", _app_channel_socket_path)
+	log.Println("KernelAPI: new api created. id =", obj_id, ", rpc path =", _rpc_socket_path)
 
 	// Das Onjekt wird zurückgegeben
-	rewa := KernelAPI{_socket: l, _socket_unix_path: _rpc_socket_path, _lock: sync.Mutex{}, _object_id: obj_id, _channel_socket: r, _ch_socket_unix_path: _app_channel_socket_path}
+	rewa := KernelAPI{_socket: l, _socket_unix_path: _rpc_socket_path, _lock: sync.Mutex{}, _object_id: obj_id}
 	return &rewa, nil
 }

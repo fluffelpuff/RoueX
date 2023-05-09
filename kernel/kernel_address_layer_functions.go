@@ -149,7 +149,7 @@ func (obj *Kernel) WriteL2Package(pckge *AddressLayerPackage) error {
 func (obj *Kernel) EnterL2Package(pckge *AddressLayerPackage, conn RelayConnection) error {
 	// Es wird geprüft ob es sich um eine Lokale Adresse handelt, wenn ja wird sie Lokal weiterverabeitet
 	if obj.IsLocallyAddress(pckge.Reciver) {
-		if err := obj.EnterL2Package(pckge, conn); err != nil {
+		if err := obj.EnterLocallyPackage(pckge, conn); err != nil {
 			return fmt.Errorf("EnterL2Package: 1: " + err.Error())
 		} else {
 			return nil
@@ -158,7 +158,7 @@ func (obj *Kernel) EnterL2Package(pckge *AddressLayerPackage, conn RelayConnecti
 
 	// Es wird geprüft ob der Kernel noch ausgeführt wird
 	if !obj.IsRunning() {
-		return fmt.Errorf("EnterLocallyPackage: kernel is not running")
+		return fmt.Errorf("EnterL2Package: kernel is not running")
 	}
 
 	// Das Paket wird an das Netzwerk gesendet, sofern eine Route vorhanden ist, ansonsten wird das Paket verworfen

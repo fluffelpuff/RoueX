@@ -17,8 +17,6 @@ func GetFilePathFor(fp File) string {
 		return OSX_EXTERNAL_MODULES
 	case PRIVATE_KEY_FILE:
 		return OSX_RELAY_PRIVATE_KEY_FILE
-	case CHANNEL_PATH:
-		return OSX_NO_ROOT_CHANNEL_SOCKET
 	default:
 		return ""
 	}
