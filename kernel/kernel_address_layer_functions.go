@@ -5,31 +5,32 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/fluffelpuff/RoueX/utils"
 )
 
 // Stellt den Eintrag für einen Funktionstypen Hadnler dar
 type kernel_package_type_function_entry struct {
-	Ptf PackageTypeFunction
+	Ptf KernelTypeProtocol
 	Tpe uint8
 }
 
 // Registtriert einen neuen Kernel Package Type
-func (obj *Kernel) RegisterNewPackageTypeFunction(tpe uint8, pckgtf PackageTypeFunction) error {
+func (obj *Kernel) RegisterNewKernelTypeProtocol(tpe uint8, pckgtf KernelTypeProtocol) error {
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
 
 	// Es wird geprüft ob die Verbindung besteht
 	if obj._is_running {
 		obj._lock.Unlock()
-		return fmt.Errorf("RegisterNewPackageTypeFunction: 1: kernel is running, aborted")
+		return fmt.Errorf("RegisterNewKernelTypeProtocol: 1: kernel is running, aborted")
 	}
 
 	// Es wird geprüft ob der Eintrag bereits hinzugefügt wurde
 	var has_found *kernel_package_type_function_entry
-	for i := range obj._adr_layer_feps {
-		if obj._adr_layer_feps[i].Tpe == tpe {
-			has_found = obj._adr_layer_feps[i]
+	for i := range obj._protocols {
+		if obj._protocols[i].Tpe == tpe {
+			has_found = obj._protocols[i]
 			break
 		}
 	}
@@ -37,19 +38,19 @@ func (obj *Kernel) RegisterNewPackageTypeFunction(tpe uint8, pckgtf PackageTypeF
 	// Sollte ein passender Wert vorhanden sein, wird der Vorgang abgebrochen
 	if has_found != nil {
 		obj._lock.Unlock()
-		return fmt.Errorf("RegisterNewPackageTypeFunction: 2: type always registred")
+		return fmt.Errorf("RegisterNewKernelTypeProtocol: 2: type always registred")
 	}
 
 	// Das Objekt wird registriert
 	nwo := &kernel_package_type_function_entry{Tpe: tpe, Ptf: pckgtf}
-	obj._adr_layer_feps = append(obj._adr_layer_feps, nwo)
+	obj._protocols = append(obj._protocols, nwo)
 
 	// Der Threadlock wird freigegeben
 	obj._lock.Unlock()
 
 	// Der Kernel wird im Objekt registriert
 	if err := nwo.Ptf.RegisterKernel(obj); err != nil {
-		return fmt.Errorf("RegisterNewPackageTypeFunction: 3: " + err.Error())
+		return fmt.Errorf("RegisterNewKernelTypeProtocol: 3: " + err.Error())
 	}
 
 	// Log
@@ -60,21 +61,21 @@ func (obj *Kernel) RegisterNewPackageTypeFunction(tpe uint8, pckgtf PackageTypeF
 }
 
 // Prüft ob es für den Typen einen bekannten Paket handler gibt
-func (obj *Kernel) GetRegisteredPackageTypeFunction(tpe uint8) (PackageTypeFunction, error) {
+func (obj *Kernel) GetRegisteredKernelTypeProtocol(tpe uint8) (KernelTypeProtocol, error) {
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
 
 	// Es wird geprüft ob die Verbindung besteht
 	if obj._is_running {
 		obj._lock.Unlock()
-		return nil, fmt.Errorf("GetRegisteredPackageTypeFunction: 1: kernel is running, aborted")
+		return nil, fmt.Errorf("GetRegisteredKernelTypeProtocol: 1: kernel is running, aborted")
 	}
 
 	// Es wird geprüft ob der Eintrag bereits hinzugefügt wurde
 	var has_found *kernel_package_type_function_entry
-	for i := range obj._adr_layer_feps {
-		if obj._adr_layer_feps[i].Tpe == tpe {
-			has_found = obj._adr_layer_feps[i]
+	for i := range obj._protocols {
+		if obj._protocols[i].Tpe == tpe {
+			has_found = obj._protocols[i]
 			break
 		}
 	}
@@ -82,7 +83,7 @@ func (obj *Kernel) GetRegisteredPackageTypeFunction(tpe uint8) (PackageTypeFunct
 	// Sollte kein passender Typ gefunden werden, wird der Vorgang abegbrochen
 	if has_found == nil {
 		obj._lock.Unlock()
-		return nil, fmt.Errorf("GetRegisteredPackageTypeFunction: 2: type always registred")
+		return nil, fmt.Errorf("GetRegisteredKernelTypeProtocol: 2: type always registred")
 	}
 
 	// Der Threadlock wird freigegeben
@@ -100,7 +101,7 @@ func (obj *Kernel) EnterLocallyPackage(pckge *AddressLayerPackage, conn RelayCon
 	}
 
 	// Es wird geprüft ob es sich um eine Registrierte Paket Funktion handelt
-	register_package_type_handler, err := obj.GetRegisteredPackageTypeFunction(pckge.Type)
+	register_package_type_handler, err := obj.GetRegisteredKernelTypeProtocol(pckge.Type)
 	if err != nil {
 		return fmt.Errorf("EnterLocallyPackage: 4: " + err.Error())
 	}
@@ -168,4 +169,9 @@ func (obj *Kernel) EnterL2Package(pckge *AddressLayerPackage, conn RelayConnecti
 
 	// Der Vorgang wurde ohne Fehler beendet
 	return nil
+}
+
+// Nimmt einen Datensatz von einem Protokoll entgegen und überträgt es in das Netzwerk
+func (obj *Kernel) EnterBytesAndSendL2PackageToNetwork(protocol_type uint8, package_bytes []byte, reciver_pkey *btcec.PublicKey) (bool, error) {
+	return false, nil
 }

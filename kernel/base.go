@@ -30,7 +30,8 @@ type Kernel struct {
 	_api_interfaces        []*KernelAPI
 	_temp_key_pairs        map[string]*btcec.PrivateKey
 	_temp_ecdh_keys        map[string][]byte
-	_adr_layer_feps        []*kernel_package_type_function_entry
+	_protocols             []*kernel_package_type_function_entry
+	_memory                kernel_memory
 }
 
 // Wird unter UNIX, Linux oder Windows verwendet zum aufräumen
@@ -83,6 +84,12 @@ func CreateUnixKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 	// Log
 	fmt.Println("Creating new RoueX UNIX Kernel...")
 
+	// Der Speichermanager wird erzeugt
+	memory_manager, err := new_memory()
+	if err != nil {
+		return nil, fmt.Errorf("CreateUnixKernel: " + err.Error())
+	}
+
 	// Es wird eine Liste mit allen Vertrauten Relays abgerufen
 	trusted_relays_obj, err := loadTrustedRelaysTable(static.GetFilePathFor(static.TRUSTED_RELAYS))
 	if err != nil {
@@ -120,18 +127,19 @@ func CreateUnixKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 	new_kernel := Kernel{
 		_os_path_trimmer:       "/",
 		_kernel_id:             k_id,
-		_connection_manager:    conn_manager,
 		_private_key:           priv_key,
+		_connection_manager:    conn_manager,
 		_lock:                  new(sync.Mutex),
-		_temp_key_pairs:        make(map[string]*secp256k1.PrivateKey),
-		_temp_ecdh_keys:        make(map[string][]byte),
-		_socket_path:           static.GetFilePathFor(static.API_SOCKET),
+		_memory:                *memory_manager,
 		_routing_table:         &routing_table_obj,
 		_firewall:              firewall_table_obj,
 		_trusted_relays:        &trusted_relays_obj,
 		_api_interfaces:        make([]*KernelAPI, 0),
+		_temp_ecdh_keys:        make(map[string][]byte),
 		_external_modules_path: static.OSX_EXTERNAL_MODULES,
-		_adr_layer_feps:        []*kernel_package_type_function_entry{},
+		_temp_key_pairs:        make(map[string]*secp256k1.PrivateKey),
+		_socket_path:           static.GetFilePathFor(static.API_SOCKET),
+		_protocols:             []*kernel_package_type_function_entry{},
 	}
 
 	// Die API Schnitstelle wird im Kernel Registriert

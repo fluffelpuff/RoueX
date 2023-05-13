@@ -1,6 +1,8 @@
 package kernel
 
 import (
+	"fmt"
+
 	apiclient "github.com/fluffelpuff/RoueX/api_client"
 )
 
@@ -64,4 +66,51 @@ func (obj *Kernel) APIFetchAllRelays() ([]apiclient.ApiRelayEntry, error) {
 
 	// Die Daten werden zurückgegebn
 	return result_list, nil
+}
+
+// Gibt an ob ein bestimmtes Protocol vorhanden ist
+func (obj *Kernel) HasKernelProtocol(protocol_type uint8) bool {
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+
+	// Es wird geprüft ob die
+	var found_value *KernelTypeProtocol
+	for i := range obj._protocols {
+		if obj._protocols[i].Tpe == protocol_type {
+			found_value = &obj._protocols[i].Ptf
+			break
+		}
+	}
+
+	// Der Threadlock wird freigegeben
+	obj._lock.Unlock()
+
+	// Der Status wird wieder zurückgegeben
+	return found_value != nil
+}
+
+// Gibt das Kernel Protokoll zurück
+func (obj *Kernel) GetKernelProtocolById(protocol_type uint8) (KernelTypeProtocol, error) {
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+
+	// Es wird geprüft ob die
+	var found_value *KernelTypeProtocol
+	for i := range obj._protocols {
+		if obj._protocols[i].Tpe == protocol_type {
+			found_value = &obj._protocols[i].Ptf
+			break
+		}
+	}
+
+	// Der Threadlock wird freigegeben
+	obj._lock.Unlock()
+
+	// Sollte kein Protokoll gefunden wurden sein, wird der Vorgang abgebrochen
+	if found_value == nil {
+		return nil, fmt.Errorf("unkown protocol")
+	}
+
+	// Die Daten werden ohne Fehler zurückgegeben
+	return *found_value, nil
 }

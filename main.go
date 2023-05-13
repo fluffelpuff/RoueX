@@ -43,7 +43,7 @@ func main() {
 
 	// Das Ping Pong Layer 2 Protkoll wird Registriert
 	layer_two_ping_pong := kernelprotocols.NEW_ROUEX_PING_PONG_PROTOCOL_HANDLER()
-	if err := kernel_object.RegisterNewPackageTypeFunction(0, layer_two_ping_pong); err != nil {
+	if err := kernel_object.RegisterNewKernelTypeProtocol(0, layer_two_ping_pong); err != nil {
 		panic(err)
 	}
 

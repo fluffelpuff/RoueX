@@ -3,11 +3,13 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	apiclient "github.com/fluffelpuff/RoueX/api_client"
 	"github.com/fluffelpuff/RoueX/kernel"
 	"github.com/fluffelpuff/RoueX/utils"
@@ -82,6 +84,12 @@ func listRelays(list_all_relays bool) error {
 
 // Es wird ein Ping vorgang gestartet
 func pingRelayAddress(relay_address string) error {
+	// Es wird versucht die Adresse zu dekodieren
+	decoded_address, err := utils.ConvertAddressToPublicKey(relay_address)
+	if err != nil {
+		return fmt.Errorf("PingRelayAddress: " + err.Error())
+	}
+
 	// Die API Verbindung wird aufgebaut
 	api, err := apiclient.LoadAPI()
 	if err != nil {
@@ -92,7 +100,7 @@ func pingRelayAddress(relay_address string) error {
 	defer api.Close()
 
 	// Es wird geprüf ob auch alle Offline Relays abgerufen werden sollen
-	_, err = api.FetchAllRelays()
+	err = api.PingAddress(decoded_address, uint16(12000))
 	if err != nil {
 		panic(err)
 	}
@@ -101,16 +109,38 @@ func pingRelayAddress(relay_address string) error {
 	return nil
 }
 
+// Wandelt einen Hex PublicKey in eine Adresse um
+func convertoToAddress(address_hx_str string) error {
+	// Es wird versucht den Öffentlichen Schlüssel einzulesne
+	decodec, err := hex.DecodeString(address_hx_str)
+	if err != nil {
+		return err
+	}
+	readed_public_key, err := btcec.ParsePubKey(decodec)
+	if err != nil {
+		return err
+	}
+
+	// Der Öffentliche Schlüssel wird in die Adresse umgewandelt
+	convadr := utils.ConvertPublicKeyToAddress(readed_public_key)
+	fmt.Println(convadr)
+
+	// Der Vorgang wurde ohne Fehler durchgeführt
+	return nil
+}
+
 func main() {
 	// Definiert alle Verwendeten werte
-	var pingArg string
+	var convertPublicKeyToAddress string
 	var list_relays bool
+	var pingArg string
 	list_offline_relays := true
 
 	// Definiert alle Parameter
 	flag.BoolVar(&list_relays, "list-relays", false, "")
 	flag.StringVar(&pingArg, "ping", "", "description of ping flag")
 	flag.BoolVar(&list_offline_relays, "all", false, "A boolean flag")
+	flag.StringVar(&convertPublicKeyToAddress, "convert-to-address", "", "description of ping flag")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
@@ -128,6 +158,10 @@ func main() {
 		}
 	} else if len(pingArg) != 0 {
 		if err := pingRelayAddress(pingArg); err != nil {
+			panic(err)
+		}
+	} else if len(convertPublicKeyToAddress) != 0 {
+		if err := convertoToAddress(convertPublicKeyToAddress); err != nil {
 			panic(err)
 		}
 	} else {

@@ -2,6 +2,12 @@ package apiclient
 
 type EmptyArg struct{}
 
+type CommandArgs struct {
+	Parms  [][]byte
+	Method string
+	Id     uint8
+}
+
 type ApiRelayConnection struct {
 	Id              string
 	Protocol        string
@@ -24,3 +30,7 @@ type ApiRelayEntry struct {
 	BandwithKBs       uint64
 	Connections       []ApiRelayConnection
 }
+
+const (
+	PING_PROTOCOL uint8 = 0
+)

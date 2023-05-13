@@ -34,5 +34,6 @@ require (
 	github.com/jedib0t/go-pretty/v6 v6.4.6
 	github.com/keybase/go-keychain v0.0.0-20230307172405-3e4884637dd1
 	github.com/olekukonko/tablewriter v0.0.5
+	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
 	golang.org/x/sys v0.7.0 // indirect
 )
