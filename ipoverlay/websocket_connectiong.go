@@ -161,7 +161,7 @@ func (obj *WebsocketKernelConnection) _enter_incomming_data_package(data []byte)
 	}
 
 	// Es wird versucht das Package Frame einzulesen
-	readed_package, err := kernel.ReadAddressLayerPackageFrameFromBytes(data)
+	readed_package, err := kernel.ReadPlainAddressLayerPackageFrameFromBytes(data)
 	if err != nil {
 		log.Println("WebsocketKernelConnection: error by reading, package droped. error = "+err.Error(), "connection = "+obj._object_id)
 		return

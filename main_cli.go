@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	apiclient "github.com/fluffelpuff/RoueX/api_client"
@@ -83,30 +84,37 @@ func listRelays(list_all_relays bool) error {
 }
 
 // Es wird ein Ping vorgang gestartet
-func pingRelayAddress(relay_address string) error {
+func pingRelayAddress(relay_address string) {
 	// Es wird versucht die Adresse zu dekodieren
 	decoded_address, err := utils.ConvertAddressToPublicKey(relay_address)
 	if err != nil {
-		return fmt.Errorf("PingRelayAddress: " + err.Error())
+		fmt.Println("PingRelayAddress: " + err.Error())
+		return
 	}
 
 	// Die API Verbindung wird aufgebaut
 	api, err := apiclient.LoadAPI()
 	if err != nil {
-		return err
+		fmt.Println("PingRelayAddress: " + err.Error())
+		return
 	}
 
 	// Schließt die Verbindug am ende
 	defer api.Close()
 
-	// Es wird geprüf ob auch alle Offline Relays abgerufen werden sollen
-	err = api.PingAddress(decoded_address, uint16(12000))
-	if err != nil {
-		panic(err)
+	// Wird ausgeführt bis der User sie abbricht
+	for {
+		rt, err := api.PingAddress(decoded_address, uint16(12000))
+		if err != nil {
+			panic(err)
+		}
+		if rt == -1 {
+			fmt.Println("Request time out")
+		} else {
+			fmt.Printf("Answer from %s: Time %d ms\n", relay_address, rt)
+		}
+		time.Sleep(1 * time.Second)
 	}
-
-	// Der Vorgang wurde ohne fehler durchgeführt
-	return nil
 }
 
 // Wandelt einen Hex PublicKey in eine Adresse um
@@ -157,9 +165,7 @@ func main() {
 			panic(err)
 		}
 	} else if len(pingArg) != 0 {
-		if err := pingRelayAddress(pingArg); err != nil {
-			panic(err)
-		}
+		pingRelayAddress(pingArg)
 	} else if len(convertPublicKeyToAddress) != 0 {
 		if err := convertoToAddress(convertPublicKeyToAddress); err != nil {
 			panic(err)

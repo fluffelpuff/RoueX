@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"sync"
@@ -31,7 +32,7 @@ type Kernel struct {
 	_temp_key_pairs        map[string]*btcec.PrivateKey
 	_temp_ecdh_keys        map[string][]byte
 	_protocols             []*kernel_package_type_function_entry
-	_memory                kernel_memory
+	_memory                kernel_package_buffer
 }
 
 // Wird unter UNIX, Linux oder Windows verwendet zum aufräumen
@@ -76,7 +77,8 @@ func (obj *Kernel) RegisterAPIInterface(api_interace *KernelAPI) error {
 
 // Gibt an ob es sich um eine Lokale Adresse handelt
 func (obj *Kernel) IsLocallyAddress(pubkey btcec.PublicKey) bool {
-	return false
+	// Es wird geprüft ob der Öffentliche Schlüssel mit dem Öffentlichen Schlüssel des Servers übereinstimmt
+	return bytes.Equal(pubkey.SerializeCompressed(), obj._private_key.PubKey().SerializeCompressed())
 }
 
 // Erstellt einen UNIX Kernel
@@ -85,7 +87,7 @@ func CreateUnixKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 	fmt.Println("Creating new RoueX UNIX Kernel...")
 
 	// Der Speichermanager wird erzeugt
-	memory_manager, err := new_memory()
+	memory_manager, err := new_kernel_package_buffer()
 	if err != nil {
 		return nil, fmt.Errorf("CreateUnixKernel: " + err.Error())
 	}

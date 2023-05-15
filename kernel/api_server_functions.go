@@ -5,13 +5,13 @@ import (
 	"log"
 
 	apiclient "github.com/fluffelpuff/RoueX/api_client"
-	"github.com/fxamacker/cbor"
 )
 
 // Stellt das Kernel API Interface dar
 type Kf struct {
 	_kernel     *Kernel
 	_process_id string
+	_connection *APIProcessConnectionWrapper
 }
 
 // Ruft alle Verfügbren Relays ab
@@ -33,7 +33,7 @@ func (s *Kf) FetchRelays(_ apiclient.EmptyArg, reply *[]apiclient.ApiRelayEntry)
 }
 
 // Leitet API befehle an ein API Protocol weiter
-func (s *Kf) PassCommandArgsToProtocol(args apiclient.CommandArgs, reply *[]byte) error {
+func (s *Kf) PassCommandArgsToProtocol(args apiclient.CommandArgs, reply *map[string]interface{}) error {
 	// Es wird geprüft ob das angegebene Protocol bekannt ist
 	if !s._kernel.HasKernelProtocol(args.Id) {
 		return fmt.Errorf("unkown protocol")
@@ -46,19 +46,13 @@ func (s *Kf) PassCommandArgsToProtocol(args apiclient.CommandArgs, reply *[]byte
 	}
 
 	// Der befehl und die Patameter werden an das Protokoll übergeben
-	result, err := protocol.EnterCommandData(args.Method, args.Parms)
+	result, err := protocol.EnterCommandData(args.Method, args.Parms, s._connection)
 	if err != nil {
 		return err
 	}
 
-	// Das Antwortpaket wird in Bytes umgewandelt und werden zurückgesendet
-	cborData, err := cbor.Marshal(result, cbor.EncOptions{})
-	if err != nil {
-		panic(err)
-	}
-
 	// Die Daten werden zurückgegeben
-	*reply = cborData
+	*reply = result
 
 	// Der Vorgang wurde ohne Fehler beendet
 	return nil

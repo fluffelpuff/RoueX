@@ -54,8 +54,18 @@ func (obj *KernelAPI) _irn() bool {
 func (obj *KernelAPI) _handle_conn(conn net.Conn) {
 	// Der RPC Server wird erstellt
 	rpcServer := rpc.NewServer()
+
+	// Die Prozess ID wird erstellt
 	process_id := utils.RandStringRunes(16)
-	err := rpcServer.Register(&Kf{_kernel: obj._kernel, _process_id: process_id})
+
+	// Das Wrapper Objekt wird erzeugt
+	wrapper_obj := &APIProcessConnectionWrapper{conn: conn, lock: new(sync.Mutex), isconn: true, id: process_id}
+
+	// Die Funktionen werden bereitgestellt
+	pkf := &Kf{_kernel: obj._kernel, _process_id: process_id, _connection: wrapper_obj}
+
+	// Die RPC Funktionen werden registriert
+	err := rpcServer.Register(pkf)
 	if err != nil {
 		panic(err)
 	}
@@ -64,10 +74,18 @@ func (obj *KernelAPI) _handle_conn(conn net.Conn) {
 	log.Printf("KernelAPI: new api connection established. connection = %s\n", process_id)
 
 	// Der JSON RPC wird ausgeführt
-	rpcServer.ServeConn(conn)
+	go rpcServer.ServeConn(wrapper_obj)
+
+	// Die Schleife wird solange ausgeführt, solange die Verbindung verbunden ist
+	for wrapper_obj.IsConnected() {
+		time.Sleep(1 * time.Millisecond)
+	}
 
 	// Log
 	log.Printf("KernelAPI: api connection closed. connection = %s\n", process_id)
+
+	// Dem API Prozess Handler wird Signalisiert dass alle Vorgänge verworfen werden sollen
+	wrapper_obj.Kill()
 }
 
 // Startet das API Interface

@@ -272,7 +272,7 @@ func (obj *RelayConnectionRoutingTable) ShutdownByKernel() {
 }
 
 // Nimmt Pakete entgegen und Routet diese zu dem Entsprechenden Host
-func (obj *RelayConnectionRoutingTable) EnterPackageBufferdAndRoute(pckg *AddressLayerPackage) (bool, error) {
+func (obj *RelayConnectionRoutingTable) EnterPackageBufferdAndRoute(pckg *PlainAddressLayerPackage) (bool, error) {
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
 
@@ -299,7 +299,7 @@ func (obj *RelayConnectionRoutingTable) EnterPackageBufferdAndRoute(pckg *Addres
 	}
 
 	// Das Paket wird an die Verbindung übergeben
-	has_active_route_and_send, err := found_cpair.EnterAndForwardAddressLayerPackage(pckg)
+	has_active_route_and_send, err := found_cpair.EnterAndForwardPlainAddressLayerPackage(pckg)
 	if err != nil {
 		return false, fmt.Errorf("EnterPackageAndRoute: 1: " + err.Error())
 	}

@@ -374,7 +374,7 @@ func (obj *connection_io_pair) HasRouteForAddress(pkey *btcec.PublicKey) bool {
 }
 
 // Nimmt Pakete entgegen und leitet sie an die beste Verbindung weiter
-func (obj *connection_io_pair) EnterAndForwardAddressLayerPackage(pckg *AddressLayerPackage) (bool, error) {
+func (obj *connection_io_pair) EnterAndForwardPlainAddressLayerPackage(pckg *PlainAddressLayerPackage) (bool, error) {
 	// Es wird geprüft ob es eine Aktive verbindung gibt
 	if !obj.HasActiveConnections() {
 		return false, nil

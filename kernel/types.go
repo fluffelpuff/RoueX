@@ -56,9 +56,9 @@ type ExternalModule interface {
 
 // Gibt die Registrierte Paketfunktion an
 type KernelTypeProtocol interface {
-	EnterRecivedPackage(*AddressLayerPackage, RelayConnection) error
+	EnterRecivedPackage(*PlainAddressLayerPackage) error
 	EnterWritableBytesToReciver([]byte, *btcec.PublicKey) error
-	EnterCommandData(string, [][]byte) (map[string]interface{}, error)
+	EnterCommandData(string, [][]byte, *APIProcessConnectionWrapper) (map[string]interface{}, error)
 	RegisterKernel(kernel *Kernel) error
 	GetProtocolName() string
 	GetObjectId() string

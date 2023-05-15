@@ -13,6 +13,7 @@ func (obj *Kernel) Start() error {
 			return err
 		}
 	}
+	go buffer_io_routine(obj)
 	obj._is_running = true
 	obj._lock.Unlock()
 	return nil

@@ -65,12 +65,6 @@ func (obj *Kernel) GetRegisteredKernelTypeProtocol(tpe uint8) (KernelTypeProtoco
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
 
-	// Es wird geprüft ob die Verbindung besteht
-	if obj._is_running {
-		obj._lock.Unlock()
-		return nil, fmt.Errorf("GetRegisteredKernelTypeProtocol: 1: kernel is running, aborted")
-	}
-
 	// Es wird geprüft ob der Eintrag bereits hinzugefügt wurde
 	var has_found *kernel_package_type_function_entry
 	for i := range obj._protocols {
@@ -94,21 +88,21 @@ func (obj *Kernel) GetRegisteredKernelTypeProtocol(tpe uint8) (KernelTypeProtoco
 }
 
 // Nimmt Lokale Pakete entgegen
-func (obj *Kernel) EnterLocallyPackage(pckge *AddressLayerPackage, conn RelayConnection) error {
+func (obj *Kernel) EnterLocallyPackage(pckge *PlainAddressLayerPackage) error {
 	// Es wird geprüft ob der Body mindestens 1 Byte groß ist
 	if len(pckge.Body) < 1 {
 		return fmt.Errorf("EnterLocallyPackage: 1: Invalid layer two package recived")
 	}
 
 	// Es wird geprüft ob es sich um eine Registrierte Paket Funktion handelt
-	register_package_type_handler, err := obj.GetRegisteredKernelTypeProtocol(pckge.Type)
+	register_package_type_handler, err := obj.GetRegisteredKernelTypeProtocol(pckge.Protocol)
 	if err != nil {
 		return fmt.Errorf("EnterLocallyPackage: 4: " + err.Error())
 	}
 
 	// Sollte kein Paket Type handler vorhanden sein, wird das Paket verworfen
 	if register_package_type_handler == nil {
-		log.Println("Kernel: unkown package type, package droped. connection =", conn.GetObjectId(), "sender =", pckge.Sender, "reciver =", pckge.Reciver)
+		log.Println("Kernel: unkown package type, package droped. sender =", pckge.Sender, "reciver =", pckge.Reciver)
 		return nil
 	}
 
@@ -118,7 +112,7 @@ func (obj *Kernel) EnterLocallyPackage(pckge *AddressLayerPackage, conn RelayCon
 	}
 
 	// Das Paket wird an den Handler übergeben
-	err = register_package_type_handler.EnterRecivedPackage(pckge, conn)
+	err = register_package_type_handler.EnterRecivedPackage(pckge)
 	if err != nil {
 		return fmt.Errorf("EnterLocallyPackage: 5: " + err.Error())
 	}
@@ -128,7 +122,7 @@ func (obj *Kernel) EnterLocallyPackage(pckge *AddressLayerPackage, conn RelayCon
 }
 
 // Wird verwendet um Pakete an das Netzwerk zu senden
-func (obj *Kernel) WriteL2Package(pckge *AddressLayerPackage) error {
+func (obj *Kernel) WriteL2Package(pckge *PlainAddressLayerPackage) error {
 	// Das Paket wird an den Routing Manager übergeben
 	has_found, err := obj._connection_manager.EnterPackageBufferdAndRoute(pckge)
 	if err != nil {
@@ -146,15 +140,19 @@ func (obj *Kernel) WriteL2Package(pckge *AddressLayerPackage) error {
 	return nil
 }
 
+// Entschlüsselt ein Lokales Paket und Speichert es im Puffer
+func (obj *Kernel) DecryptLocallyPackageToBuffer(pckge *PlainAddressLayerPackage) error {
+	return nil
+}
+
 // Nimmt eintreffende Layer 2 Pakete entgegen
-func (obj *Kernel) EnterL2Package(pckge *AddressLayerPackage, conn RelayConnection) error {
+func (obj *Kernel) EnterL2Package(pckge *PlainAddressLayerPackage, conn RelayConnection) error {
 	// Es wird geprüft ob es sich um eine Lokale Adresse handelt, wenn ja wird sie Lokal weiterverabeitet
 	if obj.IsLocallyAddress(pckge.Reciver) {
-		if err := obj.EnterLocallyPackage(pckge, conn); err != nil {
+		if err := obj.DecryptLocallyPackageToBuffer(pckge); err != nil {
 			return fmt.Errorf("EnterL2Package: 1: " + err.Error())
-		} else {
-			return nil
 		}
+		return nil
 	}
 
 	// Es wird geprüft ob der Kernel noch ausgeführt wird
@@ -171,7 +169,51 @@ func (obj *Kernel) EnterL2Package(pckge *AddressLayerPackage, conn RelayConnecti
 	return nil
 }
 
-// Nimmt einen Datensatz von einem Protokoll entgegen und überträgt es in das Netzwerk
+// Nimmt einen Datensatz von einem Protokoll entgegen und überträgt es als Layer 2 Paket
 func (obj *Kernel) EnterBytesAndSendL2PackageToNetwork(protocol_type uint8, package_bytes []byte, reciver_pkey *btcec.PublicKey) (bool, error) {
-	return false, nil
+	// Das Paket wird gebaut
+	builded_locally_package := PlainAddressLayerPackage{Reciver: *reciver_pkey, Sender: *obj.GetPublicKey(), IsLocallyCreated: true, Protocol: protocol_type}
+
+	// Es wird ermittelt ob es sich um eien Lokale Adresse handelt
+	is_locally := obj.IsLocallyAddress(*reciver_pkey)
+
+	// Sollte es sich nicht um eine Lokale Adresse handeln, wird das Paket verschlüsselt und signiert
+	if !is_locally {
+		// Die Daten werden für den Empfänger verschlüsselt
+		encrypted_data, err := EncryptECIESPublicKey(reciver_pkey, package_bytes)
+		if err != nil {
+			return false, err
+		}
+
+		// Die Verschlüsselten Daten werden dem Paket hinzugefügt
+		builded_locally_package.Body = encrypted_data
+
+		// Das Paket wird Signiert
+		package_signature, err := Sign(obj._private_key, builded_locally_package.GetSignHash())
+		if err != nil {
+			return false, err
+		}
+
+		// Die Signatur wird dem Paket hinzugefügt
+		builded_locally_package.SSig = package_signature
+
+		// Das Paket wird an den Routing Manager übergebene
+		if err := obj.WriteL2Package(&builded_locally_package); err != nil {
+			return false, err
+		}
+
+		// Der Vorgang wurde ohne Fehler durchgeführt
+		return true, nil
+	}
+
+	// Die Daten werden unverschlüsselt gespeichert
+	builded_locally_package.Body = package_bytes
+
+	// Das Paket wird an den Lokalen Paket Puffer übergeben
+	if err := obj._memory.AddL2Package(&builded_locally_package); err != nil {
+		return false, err
+	}
+
+	// Der Vorgang wurde ohne Fehler durchgeführt
+	return true, nil
 }
