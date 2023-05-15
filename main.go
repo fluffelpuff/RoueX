@@ -13,9 +13,13 @@ import (
 	"github.com/fluffelpuff/RoueX/kernel"
 	kernelprotocols "github.com/fluffelpuff/RoueX/kernel_adrl_protocols"
 	"github.com/fluffelpuff/RoueX/keystore"
+	"github.com/fluffelpuff/RoueX/static"
 )
 
 func main() {
+	// Der Banner wird angezeigt
+	fmt.Print(static.WELCOME_BANNER)
+
 	// Die Einstellungen werden geladen
 	if err := loadConfigs(); err != nil {
 		panic(err)

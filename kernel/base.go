@@ -138,7 +138,7 @@ func CreateUnixKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 		_trusted_relays:        &trusted_relays_obj,
 		_api_interfaces:        make([]*KernelAPI, 0),
 		_temp_ecdh_keys:        make(map[string][]byte),
-		_external_modules_path: static.OSX_EXTERNAL_MODULES,
+		_external_modules_path: static.GetFilePathFor(static.EXTERNAL_MODULES),
 		_temp_key_pairs:        make(map[string]*secp256k1.PrivateKey),
 		_socket_path:           static.GetFilePathFor(static.API_SOCKET),
 		_protocols:             []*kernel_package_type_function_entry{},
