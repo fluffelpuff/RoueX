@@ -23,8 +23,8 @@ type Kernel struct {
 	_lock                  *sync.Mutex
 	_routing_table         *RoutingManager
 	_trusted_relays        *TrustedRelays
-	_server_modules        []*ServerModule
-	_client_modules        []*ClientModule
+	_server_modules        []ServerModule
+	_client_modules        []ClientModule
 	_connection_manager    RelayConnectionRoutingTable
 	_firewall              *Firewall
 	_private_key           *btcec.PrivateKey
@@ -35,14 +35,8 @@ type Kernel struct {
 	_memory                kernel_package_buffer
 }
 
-// Wird unter UNIX, Linux oder Windows verwendet zum aufräumen
-func (obj *Kernel) CleanUp() error {
-	log.Println("Clearing kernel...")
-	return nil
-}
-
-// Wird verwendet um zu Warten
-func (obj *Kernel) Waiter(wms uint64) {
+// Wird verwendet um zu Warten bis der Kernel läuft
+func (obj *Kernel) ServKernel(wms uint64) {
 	ticks := 0
 	for obj.IsRunning() {
 		if ticks >= int(wms) {
@@ -77,7 +71,6 @@ func (obj *Kernel) RegisterAPIInterface(api_interace *KernelAPI) error {
 
 // Gibt an ob es sich um eine Lokale Adresse handelt
 func (obj *Kernel) IsLocallyAddress(pubkey btcec.PublicKey) bool {
-	// Es wird geprüft ob der Öffentliche Schlüssel mit dem Öffentlichen Schlüssel des Servers übereinstimmt
 	return bytes.Equal(pubkey.SerializeCompressed(), obj._private_key.PubKey().SerializeCompressed())
 }
 

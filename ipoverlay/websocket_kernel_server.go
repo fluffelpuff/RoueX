@@ -15,17 +15,20 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Stellt das Upgrader Objekt da
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
 }
 
+// Stellt den Websocket Server dar
 type WebsocketKernelServerEP struct {
 	_kernel          *kernel.Kernel
 	_obj_id          string
 	_shutdown_signal bool
 	_is_running      bool
-	_server          *http.Server
+	_total_proc      uint8
+	_tcp_server      *http.Server
 	_lock            *sync.Mutex
 	_port            int
 }
@@ -50,10 +53,16 @@ func (obj *WebsocketKernelServerEP) Shutdown() {
 	// Log
 	log.Println("WebsocketKernelServerEP: shutingdown. id =", obj._obj_id)
 
-	// Es wird Signalisiert dass der Server beendet werden soll
+	// Der Threadlock wird gesperrt
 	obj._lock.Lock()
+
+	// Es wird signalisiert dass der Server heruntergefahren werden soll
 	obj._shutdown_signal = true
-	obj._server.Close()
+
+	// Schließt den TCP Server
+	obj._tcp_server.Close()
+
+	// Der Threadlock wird freigegeben
 	obj._lock.Unlock()
 
 	// Es wird gewartet bis der Server beendet wurde
@@ -62,39 +71,193 @@ func (obj *WebsocketKernelServerEP) Shutdown() {
 	}
 }
 
-// Startet den eigentlichen Server
-func (obj *WebsocketKernelServerEP) Start() error {
-	// Es wird eine neuer Thread gestartet, innerhalb dieses Threads wird der HTTP Server ausgeführt
-	go func(wsbo *WebsocketKernelServerEP) {
-		wsbo._server = &http.Server{
-			Addr:    ":" + strconv.Itoa(wsbo._port),
-			Handler: http.HandlerFunc(wsbo.upgradeHTTPConnAndRegister),
-		}
+// Wird verwendet um den TCP basierten Server zu Starten
+func (obj *WebsocketKernelServerEP) _start_tcp_tcp_server() error {
+	// Der Websocket TCP Server wird erstellt
+	obj._tcp_server = &http.Server{
+		Addr:    ":" + strconv.Itoa(obj._port),
+		Handler: http.HandlerFunc(obj.upgradeHTTPConnAndRegister),
+	}
 
-		// Es wird Signalisiert dass der Server läuft
-		wsbo._lock.Lock()
-		wsbo._is_running = true
-		wsbo._lock.Unlock()
+	// Es wird versucht den Threadlock zu sperren
+	is_use := obj._lock.TryLock()
 
-		// Der Server wird ausgeführt
-		log.Println("WebsocketKernelServerEP: new server started. id =", obj._obj_id)
-		if err := wsbo._server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	// Es wird Signalisiert dass ein Protokoll Thread läuft
+	obj._total_proc++
+
+	// Sollte der Threadlock verwenden wurden sein, wird er freigegeben
+	if is_use {
+		obj._lock.Unlock()
+	}
+
+	// Gibt an ob der eigentliche Server ausgeführt wird
+	is_running, thr := false, new(sync.Mutex)
+
+	// Der Server wurde gestartet
+	go func() {
+		// Es wird signalisiert das der Thrad ausgeführt wird
+		thr.Lock()
+		is_running = true
+		thr.Unlock()
+
+		// Der Log wird angezeigt
+		log.Printf("WebsocketKernelServerEP: new tcp based server started. id = %s, endpoint = %s\n", obj._obj_id, "0.0.0.0:"+strconv.Itoa(obj._port))
+		if err := obj._tcp_server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %s\n", err)
 		}
 
-		// Es wird Signalisiert dass der Server nicht mehr ausgeführt wird
-		wsbo._lock.Lock()
-		wsbo._is_running = false
-		wsbo._lock.Unlock()
+		// Es wird signalisiert das der Thread nicht mehr ausgeführt wird
+		thr.Lock()
+		is_running = false
+		thr.Unlock()
+
+		// Es wird versucht den Threadlock zu sperren
+		is_use = obj._lock.TryLock()
+
+		// Es wird Signalisiert dass ein Protokoll Thread weniger läuft
+		obj._total_proc--
+
+		// Sollte der Threadlock verwenden wurden sein, wird er freigegeben
+		if is_use {
+			obj._lock.Unlock()
+		}
 
 		// Log
-		log.Println("WebsocketKernelServerEP: closed. id =", obj._obj_id)
-	}(obj)
+		log.Printf("WebsocketKernelServerEP: closed. id = %s, endpoint = %s\n", obj._obj_id, "0.0.0.0:"+strconv.Itoa(obj._port))
+	}()
+
+	// Diese Funktion gibt an dass der Server noch läuft
+	server_running := func() bool {
+		thr.Lock()
+		r := is_running
+		thr.Unlock()
+		return r
+	}
+
+	// Es wird 30 MS gewartet ob der Server noch ausgeführt wird
+	for i := 0; i < 25; i++ {
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	// Es wird geprüft ob der Server noch ausgeführt wird
+	if !server_running() {
+		return fmt.Errorf("WebsocketKernelServerEP: server starting error")
+	}
+
+	// Dere Vorgang wurde ohne Fehler gestartet
+	return nil
+}
+
+// Wird verwendet um den QUIC basierten Server zu Starten
+func (obj *WebsocketKernelServerEP) _start_quic_server() error {
+	// Log
+	//log.Printf("WebsocketKernelServerEP: new quic based server started. id = %s, endpoint = %s\n", obj._obj_id, "0.0.0.0:"+strconv.Itoa(obj._port))
+	return nil
+}
+
+// Wird verwendet um zu ermitteln ob einer der Server ausgeführt wird
+func (obj *WebsocketKernelServerEP) _wait_of_rsock() {
+	// Prüft ob mindestens einen ein Protokoll Thread läuft
+	fc := func(tbo *WebsocketKernelServerEP) bool {
+		// Der Threadlock wird gesperrt
+		tbo._lock.Lock()
+
+		// Es wird geprüft ob mindestens 1 Protokoll Thread vorhanden ist
+		total := tbo._total_proc
+
+		// Der Thradlock wird wieder freigegeben
+		tbo._lock.Unlock()
+
+		// Der Status wird zurückgegeben
+		return total > 0
+	}
+
+	// Wird solange ausgeführt bis kein Protokoll mehr ausgeführt wird
+	for fc(obj) {
+		time.Sleep(1 * time.Millisecond)
+	}
+}
+
+// Startet den eigentlichen Server
+func (obj *WebsocketKernelServerEP) Start() error {
+	// Die Channel werden zurückgegeben
+	result_chan := make(chan error)
+
+	// Es wird eine neuer Thread gestartet, innerhalb dieses Threads wird der HTTP Server ausgeführt
+	go func(wsbo *WebsocketKernelServerEP, state chan error) {
+		// Es wird Signalisiert dass der Server läuft
+		wsbo._lock.Lock()
+
+		// Die Server werden gestartet
+		tcp_err := obj._start_tcp_tcp_server()
+		quic_err := obj._start_quic_server()
+
+		// Es wird geprüft ob mindestens 1 Server gestartet wurde
+		if tcp_err != nil && quic_err != nil {
+			// Der Threadlock wird freigegeben
+			wsbo._lock.Unlock()
+
+			// Der Fehler wird zurückgegeben
+			state <- fmt.Errorf("neither the TCP nor the QUIC Server Socket could be created")
+
+			// Der Vorgang wird beendet
+			return
+		}
+
+		// Es wird zurückgegeben dass kein Fehler aufgetreten ist
+		state <- nil
+
+		// Es wird Signalisiert dass der Acceptor Thread ausgeführt wird
+		wsbo._is_running = true
+
+		// Der Threadlock wird freigegeben
+		wsbo._lock.Unlock()
+
+		// Wird solange ausgeführt bis alle Sockets geschlossen wurden
+		wsbo._wait_of_rsock()
+
+		// Der Threadlock wird ausgeführt
+		wsbo._lock.Lock()
+
+		// Es wird Signalisiert dass der Thread nicht mehr läuft
+		wsbo._is_running = false
+
+		// Der Threadlock wird freigegeben
+		wsbo._lock.Unlock()
+	}(obj, result_chan)
+
+	// Es wird auf die Antwort der Gegenseite gewartet
+	res := <-result_chan
+
+	// Sollte ein Fehler aufgetreten sein, wird dieser Zurückgegeben
+	if res != nil {
+		return res
+	}
 
 	// Es wird gewartet bis der Server gestartet wurde
 	for !obj._is_rn() {
 		time.Sleep(1 * time.Millisecond)
 	}
+
+	// Es wird 30 MS gewartet
+	for i := 0; i < 25; i++ {
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	// Der Threadlock wird gesperrt
+	obj._lock.Lock()
+
+	// Es wird geprüft ob mindestens einer der Server läuft
+	if !obj._is_running {
+		// Der Threadlock wird freiegegeben
+		obj._lock.Unlock()
+
+		// Der Fehler wird zurückgegeben
+		return fmt.Errorf("WebsocketKernelServerEP: Starting error")
+	}
+
+	// Der Threadlock wird freigegeben
+	obj._lock.Unlock()
 
 	// Der Vorgang wurde ohne Fehler gestartet
 	return nil
@@ -226,7 +389,7 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	}
 
 	// Das Antwortpaket wird gebaut
-	plain_server_hello_package := EncryptedServerHelloPackage{
+	plain_tcp_server_hello_package := EncryptedServerHelloPackage{
 		PublicServerKey:   obj._kernel.GetPublicKey().SerializeCompressed(),
 		PublicClientKey:   decrypted_chpackage.PublicClientKey,
 		RandServerPKey:    temp_public_key.SerializeCompressed(),
@@ -235,7 +398,7 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	}
 
 	// Das Paket wird in Bytes umgewandelt
-	byted, err := cbor.Marshal(plain_server_hello_package, cbor.EncOptions{})
+	byted, err := cbor.Marshal(plain_tcp_server_hello_package, cbor.EncOptions{})
 	if err != nil {
 		fmt.Println(err)
 		conn.Close()
@@ -314,7 +477,7 @@ func CreateNewLocalWebsocketServerEP(ip_adr string, port uint64) (*WebsocketKern
 	rand_id := utils.RandStringRunes(16)
 
 	// Das Objekt wird vorbereitet
-	result_obj := &WebsocketKernelServerEP{_obj_id: rand_id, _lock: new(sync.Mutex)}
+	result_obj := &WebsocketKernelServerEP{_obj_id: rand_id, _lock: new(sync.Mutex), _total_proc: 0, _port: int(port)}
 
 	// Es wird eine zufälliger Objekt ID erstellt
 	log.Printf("New Websocket Server EndPoint on %s and port %d created\n", ip_adr, port)

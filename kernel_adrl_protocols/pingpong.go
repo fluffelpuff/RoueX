@@ -135,8 +135,14 @@ func (obj *rouex_entry) gtimems() uint64 {
 	// Die benötigte Zeit wird ausgerechnet
 	total_time := etime.Sub(stime)
 
+	// Der Rückgabewert wird erstellt
+	reval := uint64(total_time.Milliseconds())
+	if reval < 1 {
+		reval = 1
+	}
+
 	// Die benötigte Zeit wird zurückgegeben
-	return uint64(total_time.Milliseconds())
+	return reval
 }
 
 // Wird verwendet um zu Signalisieren dass eine Antwort eingetroffen ist
@@ -182,6 +188,9 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _add_ping_process(ping_proc *rouex_entry, p
 	// Der Threadlock wird freigegebeb
 	obj._lock.Unlock()
 
+	// Log
+	log.Printf("ROUEX_PING_PONG_PROTOCOL: register new ping process. pid = %s\n", ping_proc.GetId())
+
 	// Die Verbindung wird gloabl gespeichert
 	if process_api_conn != nil {
 		process_api_conn.AddProcessInvigoratingService(ping_proc)
@@ -212,6 +221,9 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _remove_ping_process(ping_proc *rouex_entry
 
 	// Der Threadlock wird freigegebeb
 	obj._lock.Unlock()
+
+	// Log
+	log.Printf("ROUEX_PING_PONG_PROTOCOL: ping process removed. pid = %s\n", ping_proc.GetId())
 
 	// Die Verbindung wird gloabl entfernt
 	if process_api_conn != nil {
@@ -337,7 +349,7 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _enter_incomming_pong_package(ppp PingPongP
 	obj._lock.Lock()
 	for i := range obj._open_processes {
 		if obj._open_processes[i]._id == ppp.Id {
-			log.Println("ROUEX_PING_PONG_PROTOCOL: ping package recived. id = "+ppp.Id, "source = "+hex.EncodeToString(source.SerializeCompressed()))
+			log.Println("ROUEX_PING_PONG_PROTOCOL: pong package recived. id = "+ppp.Id, "source = "+hex.EncodeToString(source.SerializeCompressed()))
 			obj._open_processes[i].signal_response()
 		}
 	}
@@ -362,11 +374,6 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) EnterRecivedPackage(pckage *kernel.PlainAdd
 	default:
 		return fmt.Errorf("error: invalid package type")
 	}
-}
-
-// Nimmt Datensätze entgegen und übergibt diese an den Kernel um das Paket entgültig abzusenden
-func (obj *ROUEX_PING_PONG_PROTOCOL) EnterWritableBytesToReciver(data []byte, reciver *btcec.PublicKey) error {
-	return nil
 }
 
 // Nimmt eintreffende Steuer Befehele entgegen

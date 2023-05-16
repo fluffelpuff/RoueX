@@ -17,7 +17,7 @@ func manageOutboundConnection(k *kernel.Kernel, o kernel.RelayOutboundPair) {
 		err := client_conn.ConnectTo(o.GetRelay().GetEndpoint(), o.GetRelay().GetPublicKey(), nil)
 		if err != nil {
 			log.Println("Outbound handler: " + err.Error())
-			k.Waiter(2500)
+			k.ServKernel(2500)
 			continue
 		}
 
@@ -26,7 +26,7 @@ func manageOutboundConnection(k *kernel.Kernel, o kernel.RelayOutboundPair) {
 		log.Println("Outbound handler: outbound relay connection closed. id =", client_conn.GetObjectId(), "reconnection in 2 seconds.")
 
 		// Es wird 2 Sekunden geartet
-		k.Waiter(2000)
+		k.ServKernel(2000)
 	}
 }
 

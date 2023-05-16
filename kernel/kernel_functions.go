@@ -19,7 +19,7 @@ func (obj *Kernel) RegisterServerModule(lcsep ServerModule) error {
 	if err := lcsep.RegisterKernel(obj); err != nil {
 		return err
 	}
-	obj._server_modules = append(obj._server_modules, &lcsep)
+	obj._server_modules = append(obj._server_modules, lcsep)
 	return nil
 }
 
@@ -32,7 +32,7 @@ func (obj *Kernel) RegisterClientModule(csep ClientModule) error {
 	if err := csep.RegisterKernel(obj); err != nil {
 		return err
 	}
-	obj._client_modules = append(obj._client_modules, &csep)
+	obj._client_modules = append(obj._client_modules, csep)
 	return nil
 }
 
@@ -102,9 +102,9 @@ func (obj *Kernel) ListOutboundTrustedAvaileRelays() ([]RelayOutboundPair, error
 			}
 			recov_entry := RelayOutboundPair{_relay: x}
 			for _, r := range obj._client_modules {
-				vat := *r
+				vat := r
 				if vat.GetProtocol() == x._type {
-					recov_entry._cl_module = r
+					recov_entry._cl_module = &r
 					break
 				}
 			}

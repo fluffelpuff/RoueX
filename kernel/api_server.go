@@ -15,13 +15,14 @@ import (
 
 // Stellt die KernelAPI dar
 type KernelAPI struct {
-	_socket           net.Listener
-	_lock             sync.Mutex
-	_socket_unix_path string
-	_kernel           *Kernel
-	_is_running       bool
-	_signal_shutdown  bool
-	_object_id        string
+	_process_connections []*APIProcessConnectionWrapper
+	_socket              net.Listener
+	_lock                sync.Mutex
+	_socket_unix_path    string
+	_kernel              *Kernel
+	_is_running          bool
+	_signal_shutdown     bool
+	_object_id           string
 }
 
 // Registriert den Kernel in der API
@@ -153,15 +154,24 @@ func (obj *KernelAPI) _start_by_kernel() error {
 
 // Schließt die API durch den Kernel
 func (obj *KernelAPI) _close_by_kernel() {
+	// Der Threadlock wird verwendet
 	obj._lock.Lock()
+
+	// Es wird Signalisiert dass die Verbindung getrennt wurde
 	obj._signal_shutdown = true
+
+	// Der Socket wird geschlossen
 	obj._socket.Close()
+
+	// Die einzelnen API Verbindungen werden geschlossen
 	obj._lock.Unlock()
 
+	// Wartet bis alle Verbindungen geschlossen wurden
 	for obj._irn() {
 		time.Sleep(1 * time.Millisecond)
 	}
 
+	// Log
 	log.Println("KernelAPI: closed by kernel. id =", obj._object_id, ", rpc path =", obj._socket_unix_path)
 }
 

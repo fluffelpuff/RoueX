@@ -40,11 +40,6 @@ func main() {
 		panic(err)
 	}
 
-	// Der Kernel Räumt die Tabellen auf
-	if err := kernel_object.CleanUp(); err != nil {
-		panic(err)
-	}
-
 	// Das Ping Pong Layer 2 Protkoll wird Registriert
 	layer_two_ping_pong := kernelprotocols.NEW_ROUEX_PING_PONG_PROTOCOL_HANDLER()
 	if err := kernel_object.RegisterNewKernelTypeProtocol(0, layer_two_ping_pong); err != nil {
@@ -77,16 +72,6 @@ func main() {
 
 	// Der Kernel wird gestartet
 	if err := kernel_object.Start(); err != nil {
-		panic(err)
-	}
-
-	// Der Websocket Server wird gestartet
-	if err := local_ws.Start(); err != nil {
-		panic(err)
-	}
-
-	// Die Externen Kernel Module werden gestartet
-	if err := kernel_object.StartExternalKernelModules(); err != nil {
 		panic(err)
 	}
 

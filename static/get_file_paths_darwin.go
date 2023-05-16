@@ -1,3 +1,5 @@
+//go:build darwin
+
 package static
 
 // Gibt den PATH für eine bestimmte Datei aus

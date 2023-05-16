@@ -32,8 +32,11 @@ const (
 
 // Speichert Namen, Version, etc ab
 const (
+	// Gibt den Adressprefix an
 	ADDRESS_PREFIX string = "rx"
-	VERSION        uint64 = 1000000
+
+	// Gibt die Version an
+	VERSION uint64 = 1000000
 )
 
 // Definiert alle Verfügabren Dateien

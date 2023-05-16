@@ -71,10 +71,3 @@ func (obj *Kernel) LoadExternalKernelModules() error {
 	// Der Vorgang wurde ohne Fehler abgeschlossen
 	return nil
 }
-
-// Wird verwendet um die Externen Kernel Module zu starten
-func (obj *Kernel) StartExternalKernelModules() error {
-	log.Println("Kernel: starting external kernel modules. id =", obj._kernel_id)
-	log.Println("Kernel: external modules started. id =", obj._kernel_id)
-	return nil
-}
