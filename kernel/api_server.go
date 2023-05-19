@@ -136,8 +136,6 @@ func (obj *KernelAPI) _start_by_kernel() error {
 		obj._is_running = false
 		obj._lock.Unlock()
 
-		// Log
-		log.Println("KernelAPI: stoped. id =", obj._object_id)
 	}(t)
 
 	// Es wird geprüft ob beim Starten des RPC Servers aufgetreten ist

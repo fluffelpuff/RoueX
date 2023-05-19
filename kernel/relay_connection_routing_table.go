@@ -12,11 +12,32 @@ import (
 
 // Stellt den Verbindungsmanager dar
 type RelayConnectionRoutingTable struct {
-	_connection_relay_map map[string]*Relay
-	_route_ro_relay       map[string]*RelayConnectionEntry
-	_relays_map           map[*Relay]*RelayConnectionEntry
-	_lock                 *sync.Mutex
-	_is_closed            bool
+	_connection_relay_map   map[string]*Relay
+	__direct_route_ro_relay map[string]*RelayConnectionEntry
+	_relays_map             map[*Relay]*RelayConnectionEntry
+	_lock                   *sync.Mutex
+	_shutdow_cmd            bool
+	_is_closed              bool
+}
+
+// Gibt an ob noch Relay Einträge vorhanden sind
+func (obj *RelayConnectionRoutingTable) _is_empty() bool {
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
+	// Es wird geprüft ob das Objekt geschlossen wurde
+	if obj._is_closed {
+		return true
+	}
+
+	// Es wird geprüft ob alle Relay Einträge Entfernt wurden
+	if len(obj._relays_map) > 0 {
+		return false
+	}
+
+	// Der Objekt wurde erfolgreich geleert
+	return true
 }
 
 // Gibt an ob es eine Aktive Verbindung gibt
@@ -59,18 +80,19 @@ func (obj *RelayConnectionRoutingTable) RegisterNewRelayConnection(relay *Relay,
 	if !found_relay_entry {
 		// Der Relay Eintrag wird erzeugt
 		relay_entry = &RelayConnectionEntry{
-			RelayLink:    *relay,
-			Connections:  []RelayConnection{},
-			PingTime:     []uint64{},
-			_lock:        new(sync.Mutex),
-			_route_links: []string{},
+			RelayLink:        *relay,
+			Connections:      []RelayConnection{},
+			PingTime:         []uint64{},
+			_lock:            new(sync.Mutex),
+			_closed:          false,
+			_signal_shutdown: false,
 		}
 
 		// Der Eintrag wird abgespeichert
 		obj._relays_map[relay] = relay_entry
 
 		// Der Relay Connection Entry wird der Adresse Route zugewiesen
-		obj._route_ro_relay[hex.EncodeToString(relay._public_key.SerializeCompressed())] = relay_entry
+		obj.__direct_route_ro_relay[hex.EncodeToString(relay._public_key.SerializeCompressed())] = relay_entry
 
 		// Log
 		log.Println("RelayConnectionRoutingTable: new relay and route added. relay =", relay.GetPublicKeyHexString())
@@ -241,7 +263,7 @@ func (obj *RelayConnectionRoutingTable) InitRoutesForRelay(rlay *Relay, routes *
 
 	// Es wird geprüft ob die Routing Liste schon zu gewiesen wurde
 	if relay.HasActiveRouteList() {
-		return true, false
+		return false, false
 	}
 
 	// Die Routingliste wird dem Relay zugewiesen
@@ -252,6 +274,9 @@ func (obj *RelayConnectionRoutingTable) InitRoutesForRelay(rlay *Relay, routes *
 			return false, false
 		}
 	}
+
+	// Log
+	log.Println("RelayConnectionRoutingTable: routes for relay inited. relay =", rlay.GetPublicKeyHexString())
 
 	// Das Relay wird herausgesucht
 	return true, true
@@ -264,21 +289,31 @@ func (obj *RelayConnectionRoutingTable) ShutdownByKernel() {
 
 	// Es wird allen Relays Signalisiert dass sie all ihre Verbindungen schließen sollen
 	for i := range obj._relays_map {
-		obj._relays_map[i].DestroyByKernel()
+		go obj._relays_map[i].CloseByKernel()
 	}
 
-	// Es wird Signalisiert dass das Objekt gehschlossen werden soll
-	obj._is_closed = true
+	// Es wird Signalisiert dass das Objekt beendet werden soll
+	obj._shutdow_cmd = true
 
 	// Der Threadlock wird freigeben
 	obj._lock.Unlock()
-
-	// Die Verbindungen werden geschlossen
 
 	// Es wird gewartet bis alle Verbindungen geschlossen wurden
 	for obj.HasActiveConnections() {
 		time.Sleep(1 * time.Millisecond)
 	}
+
+	// Wird solange gewartet bis das Objekt vollständig leer ist
+	for !obj._is_empty() {
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	// Der Threadlock wird verwendet um zu Signalisieren dass das Objekt geschlossen wurde
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
+	// Es wird Signalisiert dass das Objekt gehschlossen werden soll
+	obj._is_closed = true
 }
 
 // Nimmt Pakete entgegen und Routet diese zu dem Entsprechenden Host
@@ -293,7 +328,7 @@ func (obj *RelayConnectionRoutingTable) EnterPackageToRoutingManger(pckg *Encryp
 	}
 
 	// Das Passende Relay für diese Verbindung wird herausgefiltert
-	route_ep, found_route := obj._route_ro_relay[hex.EncodeToString(pckg.Reciver.SerializeCompressed())]
+	route_ep, found_route := obj.__direct_route_ro_relay[hex.EncodeToString(pckg.Reciver.SerializeCompressed())]
 	if !found_route {
 		return nil, false, nil
 	}
@@ -321,10 +356,11 @@ func (obj *RelayConnectionRoutingTable) EnterPackageToRoutingManger(pckg *Encryp
 // Erstellt einen neuen Verbindungs Manager
 func newRelayConnectionRoutingTable() RelayConnectionRoutingTable {
 	return RelayConnectionRoutingTable{
-		_connection_relay_map: make(map[string]*Relay),
-		_route_ro_relay:       make(map[string]*RelayConnectionEntry),
-		_relays_map:           make(map[*Relay]*RelayConnectionEntry),
-		_lock:                 new(sync.Mutex),
-		_is_closed:            false,
+		_connection_relay_map:   make(map[string]*Relay),
+		__direct_route_ro_relay: make(map[string]*RelayConnectionEntry),
+		_relays_map:             make(map[*Relay]*RelayConnectionEntry),
+		_lock:                   new(sync.Mutex),
+		_shutdow_cmd:            false,
+		_is_closed:              false,
 	}
 }

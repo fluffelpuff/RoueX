@@ -215,11 +215,10 @@ func (obj *WebsocketKernelConnection) _send_ping_and_wait_of_pong() (uint64, err
 
 // Wird als eigenständiger Thread ausgeführt, sollte es sich um den ersten Erfolgreichen Ping vorgang handeln
 func (obj *WebsocketKernelConnection) __first_ping_io_activated_routes_by_relay_connection() {
-	// Log
-	log.Println("WebsocketKernelConnection: try to load routes by relay connection. connection =", obj._object_id)
-
 	// Es wird dem Kernel signalisiert dass alle bekannten Routen für die Relay Verbindung geladen werden sollen
-	obj._kernel.DumpsRoutesForRelayByConnection(obj)
+	if complete, was_added := obj._kernel.DumpsRoutesForRelayByConnection(obj); complete && was_added {
+		log.Println("WebsocketKernelConnection: routes initing completed. connection =", obj._object_id)
+	}
 }
 
 // Gibt an ob der Ping Pong test korrekt ist
@@ -711,7 +710,7 @@ func (obj *WebsocketKernelConnection) CloseByKernel() {
 	// Die Werbsocket Verbindung wird geschlossen
 	obj._conn.Close()
 
-	// Der Threadlock wird freigegeben
+	// Der Threadlock wird freigegeben_signal_shutdown
 	obj._lock.Unlock()
 
 	// Wartet solange bis die Schleife geschlossen wurde

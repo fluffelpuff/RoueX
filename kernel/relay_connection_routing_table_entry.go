@@ -5,17 +5,20 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/fluffelpuff/RoueX/kernel/extra"
 )
 
 // Stellt einen Relay Eintrag dar
 type RelayConnectionEntry struct {
-	_lock        *sync.Mutex
-	_route_links []string
-	PingTime     []uint64
-	RelayLink    Relay
-	Connections  []RelayConnection
+	_lock            *sync.Mutex
+	_route_list      *RelayRoutesList
+	_signal_shutdown bool
+	_closed          bool
+	PingTime         []uint64
+	RelayLink        Relay
+	Connections      []RelayConnection
 }
 
 // Gibt an, ob es sich um die gleiche Verbindung handelt
@@ -130,17 +133,6 @@ func (obj *RelayConnectionEntry) GetTotalConenctions() uint64 {
 	return uint64(len(obj.Connections))
 }
 
-// Gibt die Metadaten des Relay Eintrags zurück
-func (obj *RelayConnectionEntry) GetAllMetaInformationsOfRelayConnections() []RelayConnectionMetaData {
-	// Der Threadlock wird ausgeführt
-	obj._lock.Lock()
-	defer obj._lock.Unlock()
-
-	// Die Metadaten werden erstellt
-
-	return nil
-}
-
 // Gibt an wieviele Daten zum jetzigen Zeitpunk gesendet wurden
 func (obj *RelayConnectionEntry) GetTotalWritedBytes() uint64 {
 	// Der Threadlock wird ausgeführt
@@ -207,32 +199,88 @@ func (obj *RelayConnectionEntry) IsTrustedConnection() bool {
 
 // Gibt alle Ausgehenden Verbindungen an
 func (obj *RelayConnectionEntry) GetOutboundConnections() []RelayConnection {
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
 	return nil
 }
 
 // Gibt alle Eingehenden Verbindungen aus
 func (obj *RelayConnectionEntry) GetInbouncConnections() []RelayConnection {
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
+	return nil
+}
+
+// Gibt die Metadaten des Relay Eintrags zurück
+func (obj *RelayConnectionEntry) GetAllMetaInformationsOfRelayConnections() []RelayConnectionMetaData {
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
+	// Die Metadaten werden erstellt
+
 	return nil
 }
 
 // Wird ausgeführt wenn der Kernel Signalisiert dass die Verbindung getrennt werden soll
-func (obj *RelayConnectionEntry) DestroyByKernel() {
+func (obj *RelayConnectionEntry) CloseByKernel() {
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+
+	// Die Verbindungen werden geschlossen
+	for i := range obj.Connections {
+		go obj.Connections[i].CloseByKernel()
+	}
+
+	// Es wird Signalisiert dass das Objekt beendet werden soll
+	obj._signal_shutdown = true
+
+	// Der Threadlock wird freigegeben
+	obj._lock.Unlock()
+
+	// Es wird gewartet bis alle Verbindungen geschlossen wurden
+	for obj.HasActiveConnection() {
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	// Der Threadlock wird final angewendet
 	obj._lock.Lock()
 	defer obj._lock.Unlock()
-	for i := range obj.Connections {
-		obj.Connections[i].CloseByKernel()
-	}
-	return
+
+	// Es wird festgelegt dass das Objekt erfolgreich geschlossen wurde
+	obj._closed = true
 }
 
 // Gibt an ob die Routing Liste für diesen Relay bereits zugewiesen wurde
 func (obj *RelayConnectionEntry) HasActiveRouteList() bool {
-	return false
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
+	// Das Ergebniss wirdzurückgegeben
+	return obj._route_list != nil
 }
 
 // registriert eine Routing Liste für diesen Relay
 func (obj *RelayConnectionEntry) RegisterRouteList(rlist *RelayRoutesList) bool {
-	return false
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
+	// Es wird geprüft ob bereits eine Routing Liste gesetzt wurde
+	if obj._route_list != nil {
+		return false
+	}
+
+	// Die Routingliste wird zwischengespeichert
+	obj._route_list = rlist
+
+	// Der Vorgang wurde erfolgreich druchgeführt
+	return true
 }
 
 // Nimmt Pakete entgegen welche gesendet werden sollen

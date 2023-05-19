@@ -98,8 +98,14 @@ func (obj *Kernel) Shutdown() {
 			vat.Shutdown()
 		}
 
+		// Der Threadlock wird entsperrt
+		obj._lock.Unlock()
+
 		// Es werden alle Verbindungen geschlossen
 		obj._connection_manager.ShutdownByKernel()
+
+		// Der Threadlock wird verwendet
+		obj._lock.Lock()
 
 		// Die API Schnitstellen werden geschlossen
 		for i := range obj._api_interfaces {

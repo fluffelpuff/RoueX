@@ -23,7 +23,6 @@ func manageOutboundConnection(k *kernel.Kernel, o kernel.RelayOutboundPair) {
 
 		// Wird solange ausgeführt, bis die Verbindung geschlossen wurde
 		client_conn.Serve()
-		log.Println("Outbound handler: outbound relay connection closed. id =", client_conn.GetObjectId(), "reconnection in 2 seconds.")
 
 		// Es wird 2 Sekunden geartet
 		k.ServKernel(2000)
