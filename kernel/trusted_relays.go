@@ -7,6 +7,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/fluffelpuff/RoueX/utils"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -103,7 +104,7 @@ func loadTrustedRelaysTable(path string) (TrustedRelays, error) {
 			if err != nil {
 				return TrustedRelays{}, err
 			}
-			pkey, err := ReadPublicKeyFromByteSlice(decoded_pkey)
+			pkey, err := utils.ReadPublicKeyFromByteSlice(decoded_pkey)
 			if err != nil {
 				return TrustedRelays{}, err
 			}

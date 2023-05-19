@@ -1,4 +1,4 @@
-//go:build !lc
+//go:build lc
 
 package static
 
@@ -14,13 +14,13 @@ const (
 	OSX_RELAY_PRIVATE_KEY_FILE = "/Users/fluffelbuff/Desktop/relay.privkey.r"
 
 	// Linux Dateipfade
-	DEBIAN_BASE_CONFIG_PATH       = "/home/fluffelbuff/Schreibtisch/rouex.config"
-	DEBIAN_NO_ROOT_API_SOCKET     = "/home/fluffelbuff/Schreibtisch/rouex.socket"
-	DEBIAN_TRUSTED_RELAYS_PATH    = "/home/fluffelbuff/Schreibtisch/trusted_relays.table"
-	DEBIAN_ROUTING_TABLE_PATH     = "/home/fluffelbuff/Schreibtisch/routing.table"
-	DEBIAN_FIREWALL_TABLE_PATH    = "/home/fluffelbuff/Schreibtisch/firewall.table"
-	DEBIAN_EXTERNAL_MODULES       = "/home/fluffelbuff/Schreibtisch/external_modules/"
-	DEBIAN_RELAY_PRIVATE_KEY_FILE = "/home/fluffelbuff/Schreibtisch/relay.privkey.r"
+	DEBIAN_BASE_CONFIG_PATH       = "/home/fluffelbuff/Schreibtisch/rouex_lc.config"
+	DEBIAN_NO_ROOT_API_SOCKET     = "/home/fluffelbuff/Schreibtisch/rouex_lc.socket"
+	DEBIAN_TRUSTED_RELAYS_PATH    = "/home/fluffelbuff/Schreibtisch/trusted_relays_lc.table"
+	DEBIAN_ROUTING_TABLE_PATH     = "/home/fluffelbuff/Schreibtisch/routing_lc.table"
+	DEBIAN_FIREWALL_TABLE_PATH    = "/home/fluffelbuff/Schreibtisch/firewall_lc.table"
+	DEBIAN_EXTERNAL_MODULES       = "/home/fluffelbuff/Schreibtisch/external_modules2/"
+	DEBIAN_RELAY_PRIVATE_KEY_FILE = "/home/fluffelbuff/Schreibtisch/relay_lc.privkey.r"
 
 	// Windows Dateipfade
 	WIN32_BASE_CONFIG_PATH       = "/Users/fluffelbuff/Desktop/rouex.config"
@@ -41,7 +41,7 @@ const (
 	VERSION uint64 = 1000000
 
 	// Gibt den Standard WS-Port an
-	WS_PORT uint64 = 9381
+	WS_PORT uint64 = 9382
 )
 
 // Definiert alle Verfügabren Dateien

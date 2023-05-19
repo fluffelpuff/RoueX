@@ -328,22 +328,22 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	}
 
 	// Es wird versucht die Öffentlichen Schlüssel einzulesen
-	pub_client_key, err := kernel.ReadPublicKeyFromByteSlice(decrypted_chpackage.PublicClientKey)
+	pub_client_key, err := utils.ReadPublicKeyFromByteSlice(decrypted_chpackage.PublicClientKey)
 	if err != nil {
 		r.Body.Close()
 		return
 	}
-	pub_client_otk_key, err := kernel.ReadPublicKeyFromByteSlice(decrypted_chpackage.RandClientPKey)
+	pub_client_otk_key, err := utils.ReadPublicKeyFromByteSlice(decrypted_chpackage.RandClientPKey)
 	if err != nil {
 		r.Body.Close()
 		return
 	}
 
 	// Der Hash zum überprüfen der Signatur wird erstellt
-	sign_hash := kernel.ComputeSha3256Hash(decrypted_chpackage.PublicServerKey, decrypted_chpackage.RandClientPKey)
+	sign_hash := utils.ComputeSha3256Hash(decrypted_chpackage.PublicServerKey, decrypted_chpackage.RandClientPKey)
 
 	// Es wird geprüft ob die Signatur korrekt ist
-	check, err := kernel.VerifyByBytes(pub_client_key, decrypted_chpackage.ClientSig, sign_hash)
+	check, err := utils.VerifyByBytes(pub_client_key, decrypted_chpackage.ClientSig, sign_hash)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -370,7 +370,7 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	}
 
 	// Es wird ein Hash zum signieren erstellt 'SHA3_256(decoded_pkey || temp_public_key)'
-	serve_sign_hash := kernel.ComputeSha3256Hash(decrypted_chpackage.PublicClientKey, temp_public_key.SerializeCompressed(), obj._kernel.GetPublicKey().SerializeCompressed())
+	serve_sign_hash := utils.ComputeSha3256Hash(decrypted_chpackage.PublicClientKey, temp_public_key.SerializeCompressed(), obj._kernel.GetPublicKey().SerializeCompressed())
 
 	// Der Hash wird mit dem Relay Schlüssel des Aktuellen Relays Signiert
 	relay_signature, err := obj._kernel.SignWithRelayKey(serve_sign_hash)
@@ -406,7 +406,7 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	}
 
 	// Die Daten werden mit dem Öffentlichen Schlüssel der gegenseite verschlüsselt
-	encrypted_package, err := kernel.EncryptECIESPublicKey(pub_client_key, byted)
+	encrypted_package, err := utils.EncryptECIESPublicKey(pub_client_key, byted)
 	if err != nil {
 		fmt.Println(err)
 		conn.Close()

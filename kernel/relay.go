@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"bytes"
 	"encoding/hex"
 	"log"
 
@@ -38,20 +39,23 @@ func (obj *Relay) GetPublicKeyHexString() string {
 	return hex.EncodeToString(obj._public_key.SerializeCompressed())
 }
 
-// Gibt die HEXID aus
-func (obj *Relay) GetHexId() string {
-	return obj._hexed_id
-}
-
 // Gibt an ob dem Relay vertraut wird
 func (obj *Relay) IsTrusted() bool {
 	return obj._trusted
 }
 
-// Erstellt ein nicht Vertrauenswürdiges Relay
-func NewUntrustedRelay(public_key *btcec.PublicKey, last_useed int64, end_point string, tpe string) *Relay {
-	log.Println("New temporary untrusted relay created", hex.EncodeToString(public_key.SerializeCompressed()))
-	return &Relay{_public_key: public_key, _last_used: uint64(last_useed), _type: tpe, _trusted: false, _end_point: end_point, _active: true, _hexed_id: "", _db_id: -1}
+// Gibt an, ob es sich um die gleiche Verbindung handelt
+func (obj *Relay) Equal(p2 *Relay) bool {
+	return bytes.Equal(obj.GetPublicKey().SerializeCompressed(), p2.GetPublicKey().SerializeCompressed())
+}
+
+// Gibt den Hashwert des Objekts zurück
+func (obj *Relay) Hash() uint32 {
+	var hash uint32
+	for _, c := range obj.GetPublicKey().SerializeCompressed() {
+		hash = 31*hash + uint32(c)
+	}
+	return hash
 }
 
 // Stellt ein mögliches Relay dar mit welchen nocht keien Verbindung besteht
@@ -68,4 +72,10 @@ func (obj *RelayOutboundPair) GetRelay() *Relay {
 // Gibt das Client Protkoll zurück
 func (obj *RelayOutboundPair) GetClientConnModule() *ClientModule {
 	return obj._cl_module
+}
+
+// Erstellt ein nicht Vertrauenswürdiges Relay
+func NewUntrustedRelay(public_key *btcec.PublicKey, last_useed int64, end_point string, tpe string) *Relay {
+	log.Println("New temporary untrusted relay created", hex.EncodeToString(public_key.SerializeCompressed()))
+	return &Relay{_public_key: public_key, _last_used: uint64(last_useed), _type: tpe, _trusted: false, _end_point: end_point, _active: true, _hexed_id: "", _db_id: -1}
 }

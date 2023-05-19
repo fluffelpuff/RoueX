@@ -46,6 +46,7 @@ type RelayConnection interface {
 	FinallyInit() error
 	Write([]byte) error
 	IsConnected() bool
+	IsFinally() bool
 	CloseByKernel()
 }
 
@@ -78,15 +79,13 @@ type RelayConnectionMetaData struct {
 
 // Stellt die MetaDaten dar
 type RelayMetaData struct {
-	Connections      []RelayConnectionMetaData
-	PublicKey        string
-	TotalConnections uint64
-	IsConnected      bool
-	TotalWrited      uint64
-	TotalReaded      uint64
-	PingMS           uint64
-	BandwithKBs      uint64
-	IsTrusted        bool
+	Connections []RelayConnectionMetaData
+	PublicKey   string
+	IsConnected bool
+	TotalWrited uint64
+	TotalReaded uint64
+	PingMS      uint64
+	IsTrusted   bool
 }
 
 // Gibt an ob es sich um eine Eingehende oder um eine Ausgehende Verbindung handelt

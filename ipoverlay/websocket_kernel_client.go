@@ -152,7 +152,7 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 	}
 
 	// Es wird ein Hash zum signieren erstellt 'SHA3_256(decoded_pkey || temp_public_key)'
-	sign_hash := kernel.ComputeSha3256Hash(pub_key.SerializeCompressed(), temp_public_key.SerializeCompressed())
+	sign_hash := utils.ComputeSha3256Hash(pub_key.SerializeCompressed(), temp_public_key.SerializeCompressed())
 
 	// Der Hash wird mit dem Relay Schlüssel des Aktuellen Relays Signiert
 	relay_signature, err := obj._kernel.SignWithRelayKey(sign_hash)
@@ -188,7 +188,7 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 	}
 
 	// Die Daten werden mit dem Öffentlichen Schlüssel der gegenseite verschlüsselt
-	encrypted_package, err := kernel.EncryptECIESPublicKey(pub_key, byted)
+	encrypted_package, err := utils.EncryptECIESPublicKey(pub_key, byted)
 	if err != nil {
 		obj._reset_proc()
 		return fmt.Errorf("ConnectTo: 6: " + err.Error())
@@ -233,12 +233,12 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 	}
 
 	// Es wird versucht den Öffentlicher Schlüssel des Servers einzulesen
-	public_server_key, err := kernel.ReadPublicKeyFromByteSlice(eshp.PublicServerKey)
+	public_server_key, err := utils.ReadPublicKeyFromByteSlice(eshp.PublicServerKey)
 	if err != nil {
 		obj._reset_proc()
 		return err
 	}
-	public_server_otk, err := kernel.ReadPublicKeyFromByteSlice(eshp.RandServerPKey)
+	public_server_otk, err := utils.ReadPublicKeyFromByteSlice(eshp.RandServerPKey)
 	if err != nil {
 		obj._reset_proc()
 		return err
@@ -275,9 +275,9 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 	if relay_pkyobj == nil {
 		c_time := time.Now().Unix()
 		relay_pkyobj = kernel.NewUntrustedRelay(pub_key, c_time, url_str, "ws")
-		log.Println("Unkown relay", relay_pkyobj.GetHexId(), "connected")
+		log.Println("Unkown relay", hex.EncodeToString(pub_key.SerializeCompressed()), "connected")
 	} else {
-		log.Println("Trusted relay", relay_pkyobj.GetHexId(), "connected")
+		log.Println("Trusted relay", hex.EncodeToString(pub_key.SerializeCompressed()), "connected")
 	}
 
 	// Die Verbindung wird registriert

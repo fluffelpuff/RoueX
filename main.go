@@ -47,7 +47,7 @@ func main() {
 	}
 
 	// Es wird ein Lokaler Websocket Server erezugt
-	local_ws, err := ipoverlay.CreateNewLocalWebsocketServerEP("", 9381)
+	local_ws, err := ipoverlay.CreateNewLocalWebsocketServerEP("", static.WS_PORT)
 	if err != nil {
 		panic(err)
 	}

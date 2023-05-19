@@ -161,15 +161,9 @@ func (obj *WebsocketKernelConnection) _enter_incomming_data_package(data []byte)
 	}
 
 	// Es wird versucht das Package Frame einzulesen
-	readed_package, err := kernel.ReadPlainAddressLayerPackageFrameFromBytes(data)
+	readed_package, err := kernel.ReadEncryptedAddressLayerPackageFromBytes(data)
 	if err != nil {
 		log.Println("WebsocketKernelConnection: error by reading, package droped. error = "+err.Error(), "connection = "+obj._object_id)
-		return
-	}
-
-	// Es wird geprüft ob die Signatur des Paketes korrekt ist
-	if !readed_package.ValidateSignature() {
-		log.Println("WebsocketKernelConnection: invalid sinature, package droped. connection = " + obj._object_id)
 		return
 	}
 
@@ -221,8 +215,10 @@ func (obj *WebsocketKernelConnection) _send_ping_and_wait_of_pong() (uint64, err
 
 // Wird als eigenständiger Thread ausgeführt, sollte es sich um den ersten Erfolgreichen Ping vorgang handeln
 func (obj *WebsocketKernelConnection) __first_ping_io_activated_routes_by_relay_connection() {
-	// Es wird dem Kernel signalisiert dass alle bekannten Routen für die Relay Verbindung geladen werden sollen
+	// Log
 	log.Println("WebsocketKernelConnection: try to load routes by relay connection. connection =", obj._object_id)
+
+	// Es wird dem Kernel signalisiert dass alle bekannten Routen für die Relay Verbindung geladen werden sollen
 	obj._kernel.DumpsRoutesForRelayByConnection(obj)
 }
 
@@ -449,7 +445,7 @@ func (obj *WebsocketKernelConnection) _thread_reader(rewolf chan string) {
 		}
 
 		// Das Paket wird anahnd des OTK Schlüssels entschlüsselt
-		decrypted_package, err := obj._kernel.DecryptOTKECDHById(kernel.CHACHA_2020, obj._otk_ecdh_key_id, message)
+		decrypted_package, err := obj._kernel.DecryptOTKECDHById(utils.CHACHA_2020, obj._otk_ecdh_key_id, message)
 		if err != nil {
 			func_muutx.Lock()
 			has_closed_reader_loop = err
@@ -467,7 +463,7 @@ func (obj *WebsocketKernelConnection) _thread_reader(rewolf chan string) {
 		}
 
 		// Die Signatur wird geprüft
-		is_verify, err := kernel.VerifyByBytes(obj._dest_relay_public_key, readed_ws_transport_paket.Signature, readed_ws_transport_paket.Body)
+		is_verify, err := utils.VerifyByBytes(obj._dest_relay_public_key, readed_ws_transport_paket.Signature, readed_ws_transport_paket.Body)
 		if err != nil {
 			func_muutx.Lock()
 			has_closed_reader_loop = err
@@ -554,7 +550,7 @@ func (obj *WebsocketKernelConnection) _write_ws_package(data []byte, tpe Transpo
 	}
 
 	// Das Paket wird verschlüsselt
-	encrypted_transport_package, err := kernel.EncryptECIESPublicKey(obj._dest_relay_public_key, byted_transport_package)
+	encrypted_transport_package, err := utils.EncryptECIESPublicKey(obj._dest_relay_public_key, byted_transport_package)
 	if err != nil {
 		return err
 	}
@@ -575,7 +571,7 @@ func (obj *WebsocketKernelConnection) _write_ws_package(data []byte, tpe Transpo
 	}
 
 	// Das Paket wird mittels AES-256 Bit und dem OTK ECDH Schlüssel verschlüsselt
-	final_encrypted, err := obj._kernel.EncryptOTKECDHById(kernel.CHACHA_2020, obj._otk_ecdh_key_id, byted_twerp)
+	final_encrypted, err := obj._kernel.EncryptOTKECDHById(utils.CHACHA_2020, obj._otk_ecdh_key_id, byted_twerp)
 	if err != nil {
 		return err
 	}
@@ -756,6 +752,27 @@ func (obj *WebsocketKernelConnection) GetIOType() kernel.ConnectionIoType {
 func (obj *WebsocketKernelConnection) GetSessionPKey() (*btcec.PublicKey, error) {
 	r, err := obj._kernel.GetPublicTempKeyById(obj._local_otk_key_pair)
 	return r, err
+}
+
+// Gibt an, ob es sich um die gleiche Verbindung handelt
+func (obj *WebsocketKernelConnection) Equal(p2 *WebsocketKernelConnection) bool {
+	return obj.GetObjectId() == p2.GetObjectId()
+}
+
+// Gibt den Hashwert des Objekts zurück
+func (obj *WebsocketKernelConnection) Hash() uint32 {
+	var hash uint32
+	for _, c := range obj.GetObjectId() {
+		hash = 31*hash + uint32(c)
+	}
+	return hash
+}
+
+// Gibt an ob die Verbindung fertigestellt wurde
+func (obj *WebsocketKernelConnection) IsFinally() bool {
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+	return obj._is_finally
 }
 
 // Erstellt ein neues Kernel Sitzungs Objekt

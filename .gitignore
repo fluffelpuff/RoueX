@@ -20,5 +20,6 @@
 # Go workspace file
 go.work
 RoueX
+RoueX2
 .DS_Store
 cli

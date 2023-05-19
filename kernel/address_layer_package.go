@@ -5,10 +5,11 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/fluffelpuff/RoueX/utils"
 	"github.com/fxamacker/cbor"
 )
 
-// Stellt ein einegelesenes Paket dar
+// Stellt ein nicht Verschlüsseltes Paket dar
 type PlainAddressLayerPackage struct {
 	Reciver          btcec.PublicKey
 	Sender           btcec.PublicKey
@@ -16,6 +17,22 @@ type PlainAddressLayerPackage struct {
 	Version          uint32
 	Body             []byte
 	Protocol         uint8
+	SSig             []byte
+}
+
+// Stellt die Internen und eigentlichen Verschlüsselten Daten dar
+type EncryptedInnerData struct {
+	Version  uint32
+	Protocol uint8
+	Body     []byte
+}
+
+// Stellt ein Verschlüsseltes Paket dar
+type EncryptedAddressLayerPackage struct {
+	Reciver          btcec.PublicKey
+	Sender           btcec.PublicKey
+	IsLocallyCreated bool
+	InnerData        []byte
 	SSig             []byte
 }
 
@@ -29,8 +46,13 @@ type byted_claim_layer_package struct {
 	SSig     []byte
 }
 
+// Die Inneren Daten werden in Bytes umgewandelt
+func (c *EncryptedInnerData) ToBytes() ([]byte, error) {
+	return nil, nil
+}
+
 // Prüft ob die Signatur eines Address Layer Paketes korrekt ist
-func (obi *PlainAddressLayerPackage) ValidateSignature() bool {
+func (obi *EncryptedAddressLayerPackage) ValidateSignature() bool {
 	return true
 }
 
@@ -70,34 +92,34 @@ func (obj *PlainAddressLayerPackage) GetSignHash() []byte {
 	binary.BigEndian.PutUint32(buf, obj.Version)
 
 	// Es wird ein Hash aus dem Paket erstellt
-	shash := ComputeSha3256Hash(obj.Reciver.SerializeCompressed(), obj.Sender.SerializeCompressed(), []byte{byted_prot}, buf, obj.Body)
+	shash := utils.ComputeSha3256Hash(obj.Reciver.SerializeCompressed(), obj.Sender.SerializeCompressed(), []byte{byted_prot}, buf, obj.Body)
 
 	// Der Signaturhash wird zurückgegeben
 	return shash
 }
 
 // Wird verwendet um ein PlainAddressLayerPackage aus Bytes einzulesen
-func ReadPlainAddressLayerPackageFrameFromBytes(dbyte []byte) (*PlainAddressLayerPackage, error) {
+func ReadEncryptedAddressLayerPackageFromBytes(dbyte []byte) (*EncryptedAddressLayerPackage, error) {
 	// Es wird versucht das Paket einzulesen
 	var v byted_claim_layer_package
 	if err := cbor.Unmarshal(dbyte, &v); err != nil {
-		return nil, fmt.Errorf("ReadPlainAddressLayerPackageFrameFromBytes: 1: " + err.Error())
+		return nil, fmt.Errorf("ReadEncryptedAddressLayerPackageFromBytes: 1: " + err.Error())
 	}
 
 	// Der Öffentliche Schlüssel des Senders wird eingelesen
 	sender_pkey, err := btcec.ParsePubKey(v.Sender)
 	if err != nil {
-		return nil, fmt.Errorf("ReadPlainAddressLayerPackageFrameFromBytes: 2: " + err.Error())
+		return nil, fmt.Errorf("ReadEncryptedAddressLayerPackageFromBytes: 2: " + err.Error())
 	}
 
 	// Der Öffentliche Schlüssel des Empfängers wird
 	reciver_pkey, err := btcec.ParsePubKey(v.Reciver)
 	if err != nil {
-		return nil, fmt.Errorf("ReadPlainAddressLayerPackageFrameFromBytes: 3: " + err.Error())
+		return nil, fmt.Errorf("ReadEncryptedAddressLayerPackageFromBytes: 3: " + err.Error())
 	}
 
 	// Das Paket wird nachgebaut
-	rebuilded := &PlainAddressLayerPackage{Reciver: *reciver_pkey, Sender: *sender_pkey, Version: v.Version, Body: v.Body, SSig: v.SSig, Protocol: v.Protocol, IsLocallyCreated: false}
+	rebuilded := &EncryptedAddressLayerPackage{Reciver: *reciver_pkey, Sender: *sender_pkey, InnerData: v.Body, IsLocallyCreated: false}
 
 	// Das Paket wird zurückgegeben
 	return rebuilded, nil

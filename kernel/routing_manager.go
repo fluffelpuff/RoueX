@@ -5,23 +5,36 @@ import (
 	"fmt"
 	"log"
 	"sync"
+
+	"github.com/btcsuite/btcd/btcec/v2"
 )
 
+// Stellt einen Routing Eintrag dar
 type RoutingManagerEntry struct {
 	_db_id        int64
 	_route_hex_id string
 	_relay_hex_id string
 	_last_used    int64
 	_active       bool
-	_public_key   string
+	_public_key   *btcec.PublicKey
 }
 
+// Stellt einen Routen Link dar
+type RelayRoutesList struct {
+}
+
+func (o *RelayRoutesList) GetTotalConnections() uint64 {
+	return 0
+}
+
+// Stellt einen Routing Manager dar
 type RoutingManager struct {
 	_routes []*RoutingManagerEntry
 	_lock   *sync.Mutex
 	_db     *sql.DB
 }
 
+// Wird verwendet um den Routing Manager herunterzufahren
 func (obj *RoutingManager) Shutdown() {
 	log.Println("RoutingManager: shutingdown routing table manager...")
 	obj._lock.Lock()
@@ -29,10 +42,12 @@ func (obj *RoutingManager) Shutdown() {
 	obj._lock.Unlock()
 }
 
-func (obj *RoutingManager) FetchRoutesByRelay(relay *Relay) ([]*RoutingManagerEntry, error) {
-	return []*RoutingManagerEntry{}, nil
+// Gibt die Routen für einen Spiziellen Relay aus
+func (obj *RoutingManager) FetchRoutesByRelay(relay *Relay) (*RelayRoutesList, error) {
+	return &RelayRoutesList{}, nil
 }
 
+// Wird verwendet um den Routing Manager zu laden
 func loadRoutingManager(path string) (RoutingManager, error) {
 	// Es wird versucht die SQLite Datei zu laden
 	db, err := sql.Open("sqlite3", path)
