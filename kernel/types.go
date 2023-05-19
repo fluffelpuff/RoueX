@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"github.com/btcsuite/btcd/btcec/v2"
+	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
 )
 
 // Stellt das Gerüst für ein Server Modul dar
@@ -58,7 +59,7 @@ type ExternalModule interface {
 
 // Gibt die Registrierte Paketfunktion an
 type KernelTypeProtocol interface {
-	EnterRecivedPackage(*PlainAddressLayerPackage) error
+	EnterRecivedPackage(*addresspackages.PreAddressLayerPackage) error
 	EnterCommandData(string, [][]byte, *APIProcessConnectionWrapper) (map[string]interface{}, error)
 	RegisterKernel(kernel *Kernel) error
 	GetProtocolName() string

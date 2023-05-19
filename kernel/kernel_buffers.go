@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 
+	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
 	"github.com/fluffelpuff/RoueX/kernel/extra"
 )
 
@@ -16,7 +17,7 @@ const (
 // Stellt einen Eintrag dar
 type kernel_package_buffer_entry struct {
 	sstate *extra.PackageSendState
-	pckge  *PlainAddressLayerPackage
+	pckge  *addresspackages.PreAddressLayerPackage
 }
 
 // Stellt ein Kernel Speicher dar
@@ -26,7 +27,7 @@ type kernel_package_buffer struct {
 }
 
 // Nimmt ein eintreffendes Paket entgegen
-func (obj *kernel_package_buffer) AddL2Package(pckge *PlainAddressLayerPackage) (*extra.PackageSendState, error) {
+func (obj *kernel_package_buffer) AddL2Package(pckge *addresspackages.PreAddressLayerPackage) (*extra.PackageSendState, error) {
 	// Der Threadlock wird gesperrt
 	obj.thrLock.Lock()
 	defer obj.thrLock.Unlock()
@@ -44,14 +45,14 @@ func (obj *kernel_package_buffer) AddL2Package(pckge *PlainAddressLayerPackage) 
 	obj.data = append(obj.data, entry)
 
 	// Log
-	log.Println("kernel_package_buffer: add package to buffer. phash = " + hex.EncodeToString(pckge.GetSignHash()))
+	log.Println("kernel_package_buffer: add package to buffer. phash = " + hex.EncodeToString(pckge.GetPackageHash()))
 
 	// Der Vorgang wurde ohne Fehler durchgeführt
 	return new_sstate, nil
 }
 
 // Gibt das nächste Paket aus dem Buffer zurück
-func (obj *kernel_package_buffer) GetNextPackage() *PlainAddressLayerPackage {
+func (obj *kernel_package_buffer) GetNextPackage() *addresspackages.PreAddressLayerPackage {
 	// Der Threadlock wird gesperrt
 	obj.thrLock.Lock()
 	defer obj.thrLock.Unlock()
@@ -71,7 +72,7 @@ func (obj *kernel_package_buffer) GetNextPackage() *PlainAddressLayerPackage {
 	obj.data = append(obj.data[:0], obj.data[1:]...)
 
 	// Log
-	log.Println("kernel_package_buffer: retrive package from buffer. phash = " + hex.EncodeToString(retriv.pckge.GetSignHash()))
+	log.Println("kernel_package_buffer: retrive package from buffer. phash = " + hex.EncodeToString(retriv.pckge.GetPackageHash()))
 
 	// Die Daten werden zurückgegeben
 	return retriv.pckge

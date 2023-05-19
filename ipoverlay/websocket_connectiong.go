@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
 	"github.com/fluffelpuff/RoueX/kernel"
 	"github.com/fluffelpuff/RoueX/utils"
 	"github.com/gorilla/websocket"
@@ -161,7 +162,7 @@ func (obj *WebsocketKernelConnection) _enter_incomming_data_package(data []byte)
 	}
 
 	// Es wird versucht das Package Frame einzulesen
-	readed_package, err := kernel.ReadEncryptedAddressLayerPackageFromBytes(data)
+	readed_package, err := addresspackages.ReadFinalAddressLayerPackageFromBytes(data)
 	if err != nil {
 		log.Println("WebsocketKernelConnection: error by reading, package droped. error = "+err.Error(), "connection = "+obj._object_id)
 		return
@@ -741,10 +742,12 @@ func (obj *WebsocketKernelConnection) GetTxRxBytes() (uint64, uint64) {
 
 // Gibt an ob es sich um eine ein oder ausgehende Verbindung handelt
 func (obj *WebsocketKernelConnection) GetIOType() kernel.ConnectionIoType {
+	// Der Threadlock wird verwendet
 	obj._lock.Lock()
-	r := obj._io_type
-	obj._lock.Unlock()
-	return r
+	defer obj._lock.Unlock()
+
+	// Der Aktuelle Verbindungstyp wird zurückgegeben
+	return obj._io_type
 }
 
 // Gibt den Öffentlichen Sitzungsschlüssel zurück

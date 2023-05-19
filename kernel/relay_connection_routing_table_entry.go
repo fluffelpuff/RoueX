@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
 	"github.com/fluffelpuff/RoueX/kernel/extra"
 )
 
@@ -23,15 +24,27 @@ type RelayConnectionEntry struct {
 
 // Gibt an, ob es sich um die gleiche Verbindung handelt
 func (obj *RelayConnectionEntry) Equal(p2 *Relay) bool {
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
+	// Es wird geprüft ob die zwei Öffentlichen Schlüssel übereinstimmen
 	return bytes.Equal(obj.RelayLink.GetPublicKey().SerializeCompressed(), p2.GetPublicKey().SerializeCompressed())
 }
 
 // Gibt den Hashwert des Objekts zurück
 func (obj *RelayConnectionEntry) Hash() uint32 {
+	// Der Threadlock wird ausgeführt
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
+	// Der Hash wird erstellt
 	var hash uint32
 	for _, c := range obj.RelayLink.GetPublicKey().SerializeCompressed() {
 		hash = 31*hash + uint32(c)
 	}
+
+	// Der Hash wird zurückgegeben
 	return hash
 }
 
@@ -203,7 +216,18 @@ func (obj *RelayConnectionEntry) GetOutboundConnections() []RelayConnection {
 	obj._lock.Lock()
 	defer obj._lock.Unlock()
 
-	return nil
+	// Es werden alle Ausgehenden Verbindungen Extrahiert
+	result := make([]RelayConnection, 0)
+	for i := range obj.Connections {
+		if obj.Connections[i].GetIOType() == OUTBOUND {
+			if obj.Connections[i].IsConnected() && obj.Connections[i].IsFinally() {
+				result = append(result, obj.Connections[i])
+			}
+		}
+	}
+
+	// Die Daten werden zurückgegeben
+	return result
 }
 
 // Gibt alle Eingehenden Verbindungen aus
@@ -212,7 +236,18 @@ func (obj *RelayConnectionEntry) GetInbouncConnections() []RelayConnection {
 	obj._lock.Lock()
 	defer obj._lock.Unlock()
 
-	return nil
+	// Es werden alle Ausgehenden Verbindungen Extrahiert
+	result := make([]RelayConnection, 0)
+	for i := range obj.Connections {
+		if obj.Connections[i].GetIOType() == INBOUND {
+			if obj.Connections[i].IsConnected() && obj.Connections[i].IsFinally() {
+				result = append(result, obj.Connections[i])
+			}
+		}
+	}
+
+	// Die Daten werden zurückgegeben
+	return result
 }
 
 // Gibt die Metadaten des Relay Eintrags zurück
@@ -284,8 +319,13 @@ func (obj *RelayConnectionEntry) RegisterRouteList(rlist *RelayRoutesList) bool 
 }
 
 // Nimmt Pakete entgegen welche gesendet werden sollen
-func (obj *RelayConnectionEntry) BufferL2PackageAndWrite(pckg *EncryptedAddressLayerPackage) (*extra.PackageSendState, error) {
-	fmt.Println("SEND_PING")
+func (obj *RelayConnectionEntry) BufferL2PackageAndWrite(pckg *addresspackages.FinalAddressLayerPackage) (*extra.PackageSendState, error) {
+	// Es wird geprüft ob eine Aktive Verbindung verfügbar ist
+	if obj.HasActiveConnection() {
+		return nil, fmt.Errorf("has no active connection for the route")
+	}
+
+	// Das Rückgabe Objekt wird erstellt
 	sstate := extra.NewPackageSendState()
 	return sstate, nil
 }

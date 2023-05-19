@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
 	"github.com/fluffelpuff/RoueX/kernel/extra"
 )
 
@@ -317,7 +318,7 @@ func (obj *RelayConnectionRoutingTable) ShutdownByKernel() {
 }
 
 // Nimmt Pakete entgegen und Routet diese zu dem Entsprechenden Host
-func (obj *RelayConnectionRoutingTable) EnterPackageToRoutingManger(pckg *EncryptedAddressLayerPackage) (*extra.PackageSendState, bool, error) {
+func (obj *RelayConnectionRoutingTable) EnterPackageToRoutingManger(pckg *addresspackages.FinalAddressLayerPackage) (*extra.PackageSendState, bool, error) {
 	// Der Threadlock wird verwnendet
 	obj._lock.Lock()
 	defer obj._lock.Unlock()

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
 	"github.com/fluffelpuff/RoueX/kernel"
 	"github.com/fluffelpuff/RoueX/utils"
 	"github.com/fxamacker/cbor"
@@ -254,7 +255,7 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _start_ping_pong_process(pkey *btcec.Public
 	}
 
 	// Das Ping Paket wird über das Netzwerk übermittelt
-	_, has_route, err := obj._kernel.EnterBytesAndSendL2PackageToNetwork(0, encoded_ping_package, pkey)
+	_, has_route, err := obj._kernel.EnterBytesEncryptAndSendL2PackageToNetwork(0, encoded_ping_package, pkey)
 	if err != nil {
 		// Der Ping Prozess wird wieder entfernt
 		obj._remove_ping_process(rx_entry, process_api_conn)
@@ -330,7 +331,7 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _enter_incomming_ping_package(ppp PingPongP
 	log.Println("ROUEX_PING_PONG_PROTOCOL: ping package recived. id = "+ppp.Id, "source = "+hex.EncodeToString(source.SerializeCompressed()))
 
 	// Das Ping Paket wird über das Netzwerk übermittelt
-	_, has_route, err := obj._kernel.EnterBytesAndSendL2PackageToNetwork(0, encoded_pong_package, source)
+	_, has_route, err := obj._kernel.EnterBytesEncryptAndSendL2PackageToNetwork(0, encoded_pong_package, source)
 	if err != nil {
 		return fmt.Errorf("sending error: " + err.Error())
 	}
@@ -358,7 +359,7 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _enter_incomming_pong_package(ppp PingPongP
 }
 
 // Nimmt eingetroffene Pakete aus dem Netzwerk Entgegen
-func (obj *ROUEX_PING_PONG_PROTOCOL) EnterRecivedPackage(pckage *kernel.PlainAddressLayerPackage) error {
+func (obj *ROUEX_PING_PONG_PROTOCOL) EnterRecivedPackage(pckage *addresspackages.PreAddressLayerPackage) error {
 	// Es wird versucht das Paket einzulesen
 	var ppp PingPongPackage
 	if err := cbor.Unmarshal(pckage.Body, &ppp); err != nil {
