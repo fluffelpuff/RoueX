@@ -215,6 +215,7 @@ func (obj *Kernel) EncryptPlainL2PackageAndWriteByNetworkRoute(pckge *addresspac
 	sign_hash := utils.ComputeSha3256Hash(
 		pckge.Sender.SerializeCompressed(),
 		pckge.Reciver.SerializeCompressed(),
+		[]byte("cipher"),
 		encrypted_data,
 	)
 
@@ -226,11 +227,12 @@ func (obj *Kernel) EncryptPlainL2PackageAndWriteByNetworkRoute(pckge *addresspac
 
 	// Das Verschlüsselte Paket wird erstellt
 	builded_encrypted_package := addresspackages.FinalAddressLayerPackage{
-		Sender:           pckge.Sender,
-		Reciver:          pckge.Reciver,
-		InnerData:        encrypted_data,
-		SSig:             package_signature,
-		IsLocallyCreated: pckge.IsLocallyCreated,
+		Sender:  pckge.Sender,
+		Reciver: pckge.Reciver,
+		Data:    encrypted_data,
+		Sig:     package_signature,
+		Plain:   false,
+		PCI:     false,
 	}
 
 	// Das Paket wird an den Routing Manager übergebene
@@ -244,9 +246,9 @@ func (obj *Kernel) EncryptPlainL2PackageAndWriteByNetworkRoute(pckge *addresspac
 }
 
 // Signiert ein Layer 2 Paket und sendet es unverschlüsselt an das Netzwerk
-func (obj *Kernel) PlainL2PackageAndWriteByNetworkRoute(pckge *addresspackages.PreAddressLayerPackage) (*extra.PackageSendState, bool, error) {
+func (obj *Kernel) PlainL2PackageAndWriteByNetworkRoute(pckge *addresspackages.PreAddressLayerPackage, please_check_instructions bool) (*extra.PackageSendState, bool, error) {
 	// Die Inneren Verschlüsselten Daten werden übertragen
-	internal_data := addresspackages.EncryptedInnerData{
+	internal_data := addresspackages.PlainInnerData{
 		Protocol: pckge.Protocol,
 		Body:     pckge.Body,
 		Version:  pckge.Version,
@@ -258,17 +260,12 @@ func (obj *Kernel) PlainL2PackageAndWriteByNetworkRoute(pckge *addresspackages.P
 		return nil, false, fmt.Errorf("PlainL2PackageAndWriteByNetworkRoute: 1: " + err.Error())
 	}
 
-	// Die Daten werden für den Empfänger verschlüsselt
-	encrypted_data, err := utils.EncryptECIESPublicKey(&pckge.Reciver, byted_inner_data)
-	if err != nil {
-		return nil, false, fmt.Errorf("PlainL2PackageAndWriteByNetworkRoute: 2: " + err.Error())
-	}
-
 	// Es wird ein Hash aus den Daten erstellt
 	sign_hash := utils.ComputeSha3256Hash(
 		pckge.Sender.SerializeCompressed(),
 		pckge.Reciver.SerializeCompressed(),
-		encrypted_data,
+		[]byte("unciphered"),
+		byted_inner_data,
 	)
 
 	// Der Paket Hash wird Signiert
@@ -279,11 +276,12 @@ func (obj *Kernel) PlainL2PackageAndWriteByNetworkRoute(pckge *addresspackages.P
 
 	// Das Verschlüsselte Paket wird erstellt
 	builded_encrypted_package := addresspackages.FinalAddressLayerPackage{
-		Sender:           pckge.Sender,
-		Reciver:          pckge.Reciver,
-		InnerData:        encrypted_data,
-		SSig:             package_signature,
-		IsLocallyCreated: pckge.IsLocallyCreated,
+		Sender:  pckge.Sender,
+		Reciver: pckge.Reciver,
+		Data:    byted_inner_data,
+		Sig:     package_signature,
+		Plain:   true,
+		PCI:     please_check_instructions,
 	}
 
 	// Das Paket wird an den Routing Manager übergebene
@@ -299,7 +297,12 @@ func (obj *Kernel) PlainL2PackageAndWriteByNetworkRoute(pckge *addresspackages.P
 // Nimmt einen Datensatz von einem Protokoll entgegen verschlüsselt ihn und überträgt es als Layer 2 Paket (verschlüsselt)
 func (obj *Kernel) EnterBytesEncryptAndSendL2PackageToNetwork(protocol_type uint8, package_bytes []byte, reciver_pkey *btcec.PublicKey) (*extra.PackageSendState, bool, error) {
 	// Das Paket wird gebaut
-	builded_locally_package := addresspackages.PreAddressLayerPackage{Reciver: *reciver_pkey, Sender: *obj.GetPublicKey(), IsLocallyCreated: true, Protocol: protocol_type, Body: package_bytes}
+	builded_locally_package := addresspackages.PreAddressLayerPackage{
+		Reciver:  *reciver_pkey,
+		Sender:   *obj.GetPublicKey(),
+		Protocol: protocol_type,
+		Body:     package_bytes,
+	}
 
 	// Es wird ermittelt ob es sich um eien Lokale Adresse handelt
 	is_locally := obj.IsLocallyAddress(*reciver_pkey)
@@ -327,9 +330,14 @@ func (obj *Kernel) EnterBytesEncryptAndSendL2PackageToNetwork(protocol_type uint
 }
 
 // Nimmt einen Datensatz von einem Protokoll entgegen und überträgt es als Layer 2 Paket (unverschlüsselt)
-func (obj *Kernel) EnterBytesAndSendL2PackageToNetwork(protocol_type uint8, package_bytes []byte, reciver_pkey *btcec.PublicKey) (*extra.PackageSendState, bool, error) {
+func (obj *Kernel) EnterBytesAndSendL2PackageToNetwork(protocol_type uint8, package_bytes []byte, reciver_pkey *btcec.PublicKey, please_check_instructions bool) (*extra.PackageSendState, bool, error) {
 	// Das Paket wird gebaut
-	builded_locally_package := addresspackages.PreAddressLayerPackage{Reciver: *reciver_pkey, Sender: *obj.GetPublicKey(), IsLocallyCreated: true, Protocol: protocol_type, Body: package_bytes}
+	builded_locally_package := addresspackages.PreAddressLayerPackage{
+		Reciver:  *reciver_pkey,
+		Sender:   *obj.GetPublicKey(),
+		Protocol: protocol_type,
+		Body:     package_bytes,
+	}
 
 	// Es wird ermittelt ob es sich um eien Lokale Adresse handelt
 	is_locally := obj.IsLocallyAddress(*reciver_pkey)
@@ -337,7 +345,7 @@ func (obj *Kernel) EnterBytesAndSendL2PackageToNetwork(protocol_type uint8, pack
 	// Sollte es sich nicht um eine Lokale Adresse handeln, wird das Paket verschlüsselt und signiert
 	if !is_locally {
 		// Das Paket wird an das Netzwerk gesendet
-		sstate, has_route, err := obj.PlainL2PackageAndWriteByNetworkRoute(&builded_locally_package)
+		sstate, has_route, err := obj.PlainL2PackageAndWriteByNetworkRoute(&builded_locally_package, please_check_instructions)
 		if err != nil {
 			return nil, false, fmt.Errorf("EnterBytesAndSendL2PackageToNetwork: 1: " + err.Error())
 		}

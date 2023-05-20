@@ -3,6 +3,7 @@ package kernel
 import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
+	"github.com/fluffelpuff/RoueX/kernel/extra"
 )
 
 // Stellt das Gerüst für ein Server Modul dar
@@ -37,10 +38,12 @@ type ClientModule interface {
 
 // Stellt eine Verbindung dar
 type RelayConnection interface {
+	EnterSendableData([]byte, *extra.PackageSendState) (bool, error)
+	GetSessionPKey() (*btcec.PublicKey, error)
 	RegisterKernel(kernel *Kernel) error
 	GetTxRxBytes() (uint64, uint64)
-	GetSessionPKey() (*btcec.PublicKey, error)
 	GetIOType() ConnectionIoType
+	CannUseToWrite() bool
 	GetPingTime() uint64
 	GetProtocol() string
 	GetObjectId() string

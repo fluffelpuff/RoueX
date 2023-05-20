@@ -9,12 +9,11 @@ import (
 
 // Stellt ein nicht Verschlüsseltes Paket dar
 type PreAddressLayerPackage struct {
-	Reciver          btcec.PublicKey
-	Sender           btcec.PublicKey
-	IsLocallyCreated bool
-	Version          uint32
-	Body             []byte
-	Protocol         uint8
+	Reciver  btcec.PublicKey
+	Sender   btcec.PublicKey
+	Version  uint64
+	Body     []byte
+	Protocol uint8
 }
 
 // Gibt den Signaturhash aus
@@ -26,7 +25,7 @@ func (obj *PreAddressLayerPackage) GetPackageHash() []byte {
 	buf := make([]byte, 4)
 
 	// Schreibe die Zahl ins Byte-Array
-	binary.BigEndian.PutUint32(buf, obj.Version)
+	binary.BigEndian.PutUint64(buf, obj.Version)
 
 	// Es wird ein Hash aus dem Paket erstellt
 	shash := utils.ComputeSha3256Hash(obj.Reciver.SerializeCompressed(), obj.Sender.SerializeCompressed(), []byte{byted_prot}, buf, obj.Body)

@@ -9,6 +9,7 @@ import (
 
 	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
 	"github.com/fluffelpuff/RoueX/kernel/extra"
+	"github.com/fluffelpuff/RoueX/rerror"
 )
 
 // Stellt einen Relay Eintrag dar
@@ -322,10 +323,91 @@ func (obj *RelayConnectionEntry) RegisterRouteList(rlist *RelayRoutesList) bool 
 func (obj *RelayConnectionEntry) BufferL2PackageAndWrite(pckg *addresspackages.FinalAddressLayerPackage) (*extra.PackageSendState, error) {
 	// Es wird geprüft ob eine Aktive Verbindung verfügbar ist
 	if obj.HasActiveConnection() {
-		return nil, fmt.Errorf("has no active connection for the route")
+		return nil, fmt.Errorf("no active connection for this route")
+	}
+
+	// Das Paket wird in Bytes umgewandelt
+	byted_pckge, err := pckg.ToBytes()
+	if err != nil {
+		return nil, fmt.Errorf("BufferL2PackageAndWrite: " + err.Error())
 	}
 
 	// Das Rückgabe Objekt wird erstellt
 	sstate := extra.NewPackageSendState()
+
+	// Es wird nach einer passenden Verbindung gesucht
+	var found_conn RelayConnection
+	for i := 0; i < 2; i++ {
+		// Im ersten verusch werden alle eingehenden Verbindungen abgerufen
+		// im zweiten durchgang werden eingehende Verbindung abgerufen
+		var clist []RelayConnection
+		if i == 0 {
+			clist = obj.GetOutboundConnections()
+		} else {
+			clist = obj.GetInbouncConnections()
+		}
+
+		// Sollte die CList leer sein wird ein Pani ausgelöst
+		if clist == nil {
+			panic("BufferL2PackageAndWrite: unkown error")
+		}
+
+		// Es wird geprüft ob eine Verbindung verfügbar ist
+		if len(clist) < 1 {
+			continue
+		}
+
+		// Es wird eine Verfügabre Verbindung herausgesucht
+		for x := range clist {
+			// Es wird geprüft ob die ausgewählte Verbindung initalisiert und fertigestellt wurde
+			if !clist[x].IsFinally() || !clist[x].IsConnected() {
+				continue
+			}
+
+			// Es wird geprüft ob die Verbindung zum schreiben verwendet werden kann
+			if !clist[x].CannUseToWrite() {
+				continue
+			}
+
+			// Speichert die gefundene Verbindung zwischen
+			found_conn = clist[x]
+			break
+		}
+
+		// Es wird geprüft ob eine Verbindung verfügabr ist, wenn ja wird die Schleife abgebrochen
+		if found_conn != nil {
+			break
+		}
+	}
+
+	// Sollte keine Verbindung vorhanden sein, wird der Vorgang abgebrochen
+	if found_conn == nil {
+		return nil, fmt.Errorf("")
+	}
+
+	// Die Daten werden an die Verbindung übergeben
+	if ste, err := found_conn.EnterSendableData(byted_pckge, sstate); err != nil || !ste {
+		// Der Status wird auf DROPED gesetzt
+		sstate.SetFinallyState(extra.DROPED)
+
+		// Es wird geprüft ob ein Fehler aufgetreten ist
+		if err != nil {
+			if found_conn.IsConnected() {
+				return sstate, fmt.Errorf("BufferL2PackageAndWrite: " + err.Error())
+			} else {
+				return sstate, &rerror.IOStateError{}
+			}
+		}
+
+		// Es wird geprüft ob die Verbindung mit der ausgewählten Verbindung noch besteht
+		if !found_conn.IsConnected() {
+			return sstate, &rerror.IOStateError{}
+		}
+
+		// Wenn die Verbindung noch besteht, wurde das Paket aufgrund eines vollen buffers verworfen
+		return sstate, nil
+	}
+
+	// Das Paket wurde erfolreich an den Verbindungspuffer übergeben
 	return sstate, nil
 }

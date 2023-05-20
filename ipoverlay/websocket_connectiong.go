@@ -11,6 +11,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
 	"github.com/fluffelpuff/RoueX/kernel"
+	"github.com/fluffelpuff/RoueX/kernel/extra"
 	"github.com/fluffelpuff/RoueX/utils"
 	"github.com/gorilla/websocket"
 )
@@ -21,6 +22,7 @@ type WebsocketKernelConnection struct {
 	_local_otk_key_pair      string
 	_total_reader_threads    uint8
 	_total_ping_pong_threads uint8
+	_total_writer_threads    uint8
 	_is_finally              bool
 	_signal_shutdown         bool
 	_disconnected            bool
@@ -379,163 +381,154 @@ func (obj *WebsocketKernelConnection) _signal_disconnect() {
 }
 
 // Nimmt eintreffende Pakete entgegen
-func (obj *WebsocketKernelConnection) _thread_reader(rewolf chan string) {
+func (obj *WebsocketKernelConnection) _thread_reader() error {
 	// Erzeugt den Funktions basierten Mutex
 	func_muutx := sync.Mutex{}
 
 	// Gibt an ob die Lesende Schleife beendet wurde
 	var has_closed_reader_loop error
 
-	// Gibt an ob bereits Daten empfangen wurden
-	has_recived := false
-
-	// Der Thread Signalisiert dass er ausgeführt wird
-	obj._lock.Lock()
-	obj._total_reader_threads++
-	obj._is_connected = true
-	obj._lock.Unlock()
-
-	// Diese Funktion wird nachdem Start ausgeführt, sie prüft 50 MS ob die Verbindung weiterhin besteht
+	// Der Reader Thread wird gestartet
 	go func() {
-		tick := 0
-		for tick < 50 {
-			func_muutx.Lock()
-			if has_closed_reader_loop != nil {
-				rewolf <- has_closed_reader_loop.Error()
-				func_muutx.Unlock()
-				return
-			}
-			if has_recived {
-				rewolf <- "ok"
-				func_muutx.Unlock()
-				return
-			}
-			func_muutx.Unlock()
-			time.Sleep(1 * time.Millisecond)
-			tick++
-		}
-		rewolf <- "ok"
-	}()
-
-	// Diese Schleife wird solange ausgeführt bis die Verbindung getrennt / geschlossen wurde
-	for obj._loop_bckg_run() {
-		// Es wird auf eintreffende Pakete gewartet
-		messageType, message, err := obj._conn.ReadMessage()
-		if err != nil {
-			obj._lock.Lock()
-			if obj._signal_shutdown {
-				obj._lock.Unlock()
-				break
-			}
-			obj._lock.Unlock()
-			func_muutx.Lock()
-			has_closed_reader_loop = err
-			func_muutx.Unlock()
-			break
-		}
-
-		// Die Bytes werden zugeordnert
+		// Der Thread Signalisiert dass er ausgeführt wird
 		obj._lock.Lock()
-		obj._rx_bytes += uint64(len(message))
+		obj._total_reader_threads++
+		obj._is_connected = true
 		obj._lock.Unlock()
 
-		// Überprüfen Sie, ob der Nachrichtentyp "binary" ist
-		if messageType != websocket.BinaryMessage {
-			continue
+		// Diese Schleife wird solange ausgeführt bis die Verbindung getrennt / geschlossen wurde
+		for obj._loop_bckg_run() {
+			// Es wird auf eintreffende Pakete gewartet
+			messageType, message, err := obj._conn.ReadMessage()
+			if err != nil {
+				obj._lock.Lock()
+				if obj._signal_shutdown {
+					obj._lock.Unlock()
+					break
+				}
+				obj._lock.Unlock()
+				func_muutx.Lock()
+				has_closed_reader_loop = err
+				func_muutx.Unlock()
+				break
+			}
+
+			// Die Bytes werden zugeordnert
+			obj._lock.Lock()
+			obj._rx_bytes += uint64(len(message))
+			obj._lock.Unlock()
+
+			// Überprüfen Sie, ob der Nachrichtentyp "binary" ist
+			if messageType != websocket.BinaryMessage {
+				continue
+			}
+
+			// Das Paket wird anahnd des OTK Schlüssels entschlüsselt
+			decrypted_package, err := obj._kernel.DecryptOTKECDHById(utils.CHACHA_2020, obj._otk_ecdh_key_id, message)
+			if err != nil {
+				func_muutx.Lock()
+				has_closed_reader_loop = err
+				func_muutx.Unlock()
+				break
+			}
+
+			// Das Verschlüsselte Paket wird eingelesen
+			readed_ws_transport_paket, err := readWSTransportPaketFromBytes(decrypted_package)
+			if err != nil {
+				func_muutx.Lock()
+				has_closed_reader_loop = err
+				func_muutx.Unlock()
+				break
+			}
+
+			// Die Signatur wird geprüft
+			is_verify, err := utils.VerifyByBytes(obj._dest_relay_public_key, readed_ws_transport_paket.Signature, readed_ws_transport_paket.Body)
+			if err != nil {
+				func_muutx.Lock()
+				has_closed_reader_loop = err
+				func_muutx.Unlock()
+				break
+			}
+			if !is_verify {
+				func_muutx.Lock()
+				has_closed_reader_loop = fmt.Errorf("invalid package signature")
+				func_muutx.Unlock()
+				break
+			}
+
+			// Das Transportpaket wird entschlüsselt
+			decrypted_transport_package, err := obj._kernel.DecryptWithPrivateRelayKey(readed_ws_transport_paket.Body)
+			if err != nil {
+				func_muutx.Lock()
+				has_closed_reader_loop = err
+				func_muutx.Unlock()
+				break
+			}
+
+			// Es wird veruscht das Paket einzulesen
+			read_transport_package, err := readEncryptedTransportPackageFromBytes(decrypted_transport_package)
+			if err != nil {
+				func_muutx.Lock()
+				has_closed_reader_loop = err
+				func_muutx.Unlock()
+				break
+			}
+
+			// Es wird geprüft um was für ein Pakettypen es sich handelt
+			if read_transport_package.Type == Ping {
+				obj.__recived_ping_paket(read_transport_package.Data)
+			} else if read_transport_package.Type == Pong {
+				obj.__recived_pong_paket(read_transport_package.Data)
+			} else if read_transport_package.Type == Data {
+				obj._enter_incomming_data_package(read_transport_package.Data)
+			} else {
+				func_muutx.Lock()
+				has_closed_reader_loop = fmt.Errorf("unkown package type")
+				func_muutx.Unlock()
+				break
+			}
 		}
 
-		// Das Paket wird anahnd des OTK Schlüssels entschlüsselt
-		decrypted_package, err := obj._kernel.DecryptOTKECDHById(utils.CHACHA_2020, obj._otk_ecdh_key_id, message)
-		if err != nil {
-			func_muutx.Lock()
-			has_closed_reader_loop = err
-			func_muutx.Unlock()
-			break
-		}
+		// Log
+		log.Println("WebsocketKernelConnection: connection closed. connection =", obj._object_id)
 
-		// Das Verschlüsselte Paket wird eingelesen
-		readed_ws_transport_paket, err := readWSTransportPaketFromBytes(decrypted_package)
-		if err != nil {
-			func_muutx.Lock()
-			has_closed_reader_loop = err
-			func_muutx.Unlock()
-			break
-		}
+		// Signalisiert dass die Verbindung getrennt wurde
+		obj._signal_disconnect()
 
-		// Die Signatur wird geprüft
-		is_verify, err := utils.VerifyByBytes(obj._dest_relay_public_key, readed_ws_transport_paket.Signature, readed_ws_transport_paket.Body)
-		if err != nil {
-			func_muutx.Lock()
-			has_closed_reader_loop = err
-			func_muutx.Unlock()
-			break
-		}
-		if !is_verify {
-			func_muutx.Lock()
-			has_closed_reader_loop = fmt.Errorf("invalid package signature")
-			func_muutx.Unlock()
-			break
-		}
+		// Es wird signalisiert dass keine Verbindung mehr verfügbar ist
+		obj._lock.Lock()
+		obj._total_reader_threads--
+		obj._is_connected = false
+		obj._lock.Unlock()
 
-		// Das Transportpaket wird entschlüsselt
-		decrypted_transport_package, err := obj._kernel.DecryptWithPrivateRelayKey(readed_ws_transport_paket.Body)
-		if err != nil {
-			func_muutx.Lock()
-			has_closed_reader_loop = err
-			func_muutx.Unlock()
-			break
-		}
+		// Die Verbindung wird vollständig vernichtet
+		obj._destroy_disconnected()
+	}()
 
-		// Es wird veruscht das Paket einzulesen
-		read_transport_package, err := readEncryptedTransportPackageFromBytes(decrypted_transport_package)
-		if err != nil {
-			func_muutx.Lock()
-			has_closed_reader_loop = err
-			func_muutx.Unlock()
-			break
-		}
-
-		// Es wird geprüft um was für ein Pakettypen es sich handelt
-		if read_transport_package.Type == Ping {
-			obj.__recived_ping_paket(read_transport_package.Data)
-		} else if read_transport_package.Type == Pong {
-			obj.__recived_pong_paket(read_transport_package.Data)
-		} else if read_transport_package.Type == Data {
-			obj._enter_incomming_data_package(read_transport_package.Data)
-		} else {
-			func_muutx.Lock()
-			has_closed_reader_loop = fmt.Errorf("unkown package type")
-			func_muutx.Unlock()
-			break
-		}
-
-		// Es wird geprüft ob bereits ein Paket empfangen wurde
-		func_muutx.Lock()
-		if !has_recived {
-			has_recived = true
-		}
-		func_muutx.Unlock()
+	// Es wird auf die Bestätigung durch den Reader gewartet (20ms)
+	for i := 1; i <= 20; i++ {
+		time.Sleep(1 * time.Millisecond)
 	}
 
-	// Es ein Fehler Vorhanden sein wird dieser angzeiegt
+	// Es wird geprüft ob ein Fehler aufgetreten ist
+	func_muutx.Lock()
+	defer func_muutx.Unlock()
 	if has_closed_reader_loop != nil {
-		log.Println("WebsocketKernelConnection:", has_closed_reader_loop)
+		return fmt.Errorf("_thread_reader: " + has_closed_reader_loop.Error())
 	}
 
-	// Log
-	log.Println("WebsocketKernelConnection: connection closed. connection =", obj._object_id)
+	// Es wird geprüft ob die Verbindung aufgebaut werden konnte
+	if !obj.IsConnected() {
+		return fmt.Errorf("_thread_reader: connection was closed by initing")
+	}
 
-	// Signalisiert dass die Verbindung getrennt wurde
-	obj._signal_disconnect()
+	// Der Vorgang wurde Fehler durchgeführt
+	return nil
+}
 
-	// Es wird signalisiert dass keine Verbindung mehr verfügbar ist
-	obj._lock.Lock()
-	obj._total_reader_threads--
-	obj._is_connected = false
-	obj._lock.Unlock()
-
-	// Die Verbindung wird vollständig vernichtet
-	obj._destroy_disconnected()
+// Wird als Thread ausgeführt und versendet ausgehende Pakete
+func (obj *WebsocketKernelConnection) _thread_writer() error {
+	return nil
 }
 
 // Wird verwendet um ein Paket Abzusenden
@@ -624,25 +617,25 @@ func (obj *WebsocketKernelConnection) _check_is_full_closed() bool {
 func (obj *WebsocketKernelConnection) FinallyInit() error {
 	// Es wird geprüft ob bereits ein Reader gestartet wurde
 	obj._lock.Lock()
-	if obj._total_reader_threads != 0 {
+	if obj._total_reader_threads != 0 || obj._total_writer_threads != 0 {
 		obj._lock.Unlock()
 		return nil
 	}
 	obj._lock.Unlock()
 
 	// Der Reader wird gestartet
-	io := make(chan string)
-	go obj._thread_reader(io)
-
-	// Es wird auf die Bestätigung durch den Reader gewartet
-	resolv := <-io
-	if resolv != "ok" {
-		return fmt.Errorf(resolv)
+	if err := obj._thread_reader(); err != nil {
+		return fmt.Errorf("FinallyInit: 1: " + err.Error())
 	}
 
-	// Es wird geprüft ob genau 1 Reader Thread ausgeführt wird
+	// Der Senderthread wird gestartet
+	if err := obj._thread_writer(); err != nil {
+		return fmt.Errorf("FinallyInit: 2: " + err.Error())
+	}
+
+	// Es wird geprüft ob der Reader und Writer Thread bereits ausgeführt wird
 	obj._lock.Lock()
-	if obj._total_reader_threads != 1 {
+	if obj._total_reader_threads != 1 || obj._total_writer_threads != 1 {
 		obj._lock.Unlock()
 		return fmt.Errorf("internal error")
 	}
@@ -777,6 +770,16 @@ func (obj *WebsocketKernelConnection) IsFinally() bool {
 	return obj._is_finally
 }
 
+// Wird verwendet um Gepufferte Daten entgegenzunehemen
+func (obj *WebsocketKernelConnection) EnterSendableData(data []byte, ss *extra.PackageSendState) (bool, error) {
+	return false, nil
+}
+
+// Gibt an ob der Buffer der Verbindung das Schreiben zu lässt
+func (obj *WebsocketKernelConnection) CannUseToWrite() bool {
+	return false
+}
+
 // Erstellt ein neues Kernel Sitzungs Objekt
 func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id string, relay_public_key *btcec.PublicKey, relay_otk_public_key *btcec.PublicKey, relay_otk_ecdh_key_id string, bandwith float64, ping_time uint64, io_type kernel.ConnectionIoType) (*WebsocketKernelConnection, error) {
 	// Das Objekt wird erstellt
@@ -792,6 +795,8 @@ func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id s
 		_io_type:               io_type,
 		_conn:                  conn,
 		_signal_shutdown:       false,
+		_total_writer_threads:  0,
+		_total_reader_threads:  0,
 	}
 
 	// Das Objekt wird zurückgegben
