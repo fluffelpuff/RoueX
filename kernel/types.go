@@ -38,7 +38,7 @@ type ClientModule interface {
 
 // Stellt eine Verbindung dar
 type RelayConnection interface {
-	EnterSendableData([]byte, *extra.PackageSendState) (bool, error)
+	EnterSendableData([]byte) (*extra.PackageSendState, error)
 	GetSessionPKey() (*btcec.PublicKey, error)
 	RegisterKernel(kernel *Kernel) error
 	GetTxRxBytes() (uint64, uint64)

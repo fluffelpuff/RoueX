@@ -22,7 +22,7 @@ func (obj *PreAddressLayerPackage) GetPackageHash() []byte {
 	byted_prot := byte(obj.Protocol)
 
 	// Die Version wird umgewandelt
-	buf := make([]byte, 4)
+	buf := make([]byte, 8)
 
 	// Schreibe die Zahl ins Byte-Array
 	binary.BigEndian.PutUint64(buf, obj.Version)

@@ -318,40 +318,40 @@ func (obj *RelayConnectionRoutingTable) ShutdownByKernel() {
 }
 
 // Nimmt Pakete entgegen und Routet diese zu dem Entsprechenden Host
-func (obj *RelayConnectionRoutingTable) EnterPackageToRoutingManger(pckg *addresspackages.FinalAddressLayerPackage) (*extra.PackageSendState, bool, error) {
+func (obj *RelayConnectionRoutingTable) EnterPackageToRoutingManger(pckg *addresspackages.FinalAddressLayerPackage) (*extra.PackageSendState, error) {
 	// Der Threadlock wird verwnendet
 	obj._lock.Lock()
 	defer obj._lock.Unlock()
 
 	// Es wird geprüft ob die Routing Tabelle geschlossen wurde
 	if obj._is_closed {
-		return nil, false, fmt.Errorf("EnterPackageToRoutingManger: 1: routing table are closed")
+		return nil, fmt.Errorf("EnterPackageToRoutingManger: 1: routing table are closed")
 	}
 
 	// Das Passende Relay für diese Verbindung wird herausgefiltert
 	route_ep, found_route := obj.__direct_route_ro_relay[hex.EncodeToString(pckg.Reciver.SerializeCompressed())]
 	if !found_route {
-		return nil, false, nil
+		return nil, nil
 	}
 
 	// Es wird geprüft ob eine Route samt Verbindung gefunden wurde
 	if !found_route {
-		return nil, false, nil
+		return nil, nil
 	}
 
 	// Es wird geprüft ob mit der Gegenseite ein Verbindung besteht
 	if !route_ep.HasActiveConnection() {
-		return nil, false, nil
+		return nil, nil
 	}
 
 	// Das Paket wird an die Verbindung übergeben
 	sstate, err := route_ep.BufferL2PackageAndWrite(pckg)
 	if err != nil {
-		return nil, true, fmt.Errorf("EnterPackageToRoutingManger: 2: " + err.Error())
+		return nil, fmt.Errorf("EnterPackageToRoutingManger: 2: " + err.Error())
 	}
 
 	// Das Paket wurde erfolgreich an die Verbindung gesendet
-	return sstate, true, nil
+	return sstate, nil
 }
 
 // Erstellt einen neuen Verbindungs Manager

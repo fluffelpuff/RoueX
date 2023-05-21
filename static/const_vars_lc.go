@@ -42,6 +42,10 @@ const (
 
 	// Gibt den Standard WS-Port an
 	WS_PORT uint64 = 9382
+
+	// Gibt an, wieviele Pakete eine Websocket Verbindung zwischenspeichern kann
+	WS_MAX_PACKAGES uint32 = 128
+	WS_MAX_BYTES    uint64 = 256000 * 32
 )
 
 // Definiert alle Verfügabren Dateien

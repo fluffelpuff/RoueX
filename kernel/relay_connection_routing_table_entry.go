@@ -322,18 +322,15 @@ func (obj *RelayConnectionEntry) RegisterRouteList(rlist *RelayRoutesList) bool 
 // Nimmt Pakete entgegen welche gesendet werden sollen
 func (obj *RelayConnectionEntry) BufferL2PackageAndWrite(pckg *addresspackages.FinalAddressLayerPackage) (*extra.PackageSendState, error) {
 	// Es wird geprüft ob eine Aktive Verbindung verfügbar ist
-	if obj.HasActiveConnection() {
-		return nil, fmt.Errorf("no active connection for this route")
+	if !obj.HasActiveConnection() {
+		return nil, rerror.NewIOStateError("has no active connection, fotze")
 	}
 
 	// Das Paket wird in Bytes umgewandelt
 	byted_pckge, err := pckg.ToBytes()
 	if err != nil {
-		return nil, fmt.Errorf("BufferL2PackageAndWrite: " + err.Error())
+		return nil, rerror.NewIOStateError("internal package codec error")
 	}
-
-	// Das Rückgabe Objekt wird erstellt
-	sstate := extra.NewPackageSendState()
 
 	// Es wird nach einer passenden Verbindung gesucht
 	var found_conn RelayConnection
@@ -382,32 +379,30 @@ func (obj *RelayConnectionEntry) BufferL2PackageAndWrite(pckg *addresspackages.F
 
 	// Sollte keine Verbindung vorhanden sein, wird der Vorgang abgebrochen
 	if found_conn == nil {
-		return nil, fmt.Errorf("")
+		return nil, rerror.NewIOStateError("no connection found")
 	}
 
 	// Die Daten werden an die Verbindung übergeben
-	if ste, err := found_conn.EnterSendableData(byted_pckge, sstate); err != nil || !ste {
-		// Der Status wird auf DROPED gesetzt
-		sstate.SetFinallyState(extra.DROPED)
-
+	ste, err := found_conn.EnterSendableData(byted_pckge)
+	if err != nil {
 		// Es wird geprüft ob ein Fehler aufgetreten ist
 		if err != nil {
-			if found_conn.IsConnected() {
-				return sstate, fmt.Errorf("BufferL2PackageAndWrite: " + err.Error())
+			if _, ok := err.(*rerror.IOStateError); ok {
+				return nil, err
 			} else {
-				return sstate, &rerror.IOStateError{}
+				return nil, fmt.Errorf("BufferL2PackageAndWrite: " + err.Error())
 			}
 		}
 
 		// Es wird geprüft ob die Verbindung mit der ausgewählten Verbindung noch besteht
 		if !found_conn.IsConnected() {
-			return sstate, &rerror.IOStateError{}
+			return nil, rerror.NewIOStateError("connection closed")
 		}
 
 		// Wenn die Verbindung noch besteht, wurde das Paket aufgrund eines vollen buffers verworfen
-		return sstate, nil
+		return nil, rerror.NewIOStateError("buffer overflow")
 	}
 
 	// Das Paket wurde erfolreich an den Verbindungspuffer übergeben
-	return sstate, nil
+	return ste, nil
 }

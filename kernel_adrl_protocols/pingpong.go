@@ -11,6 +11,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
 	"github.com/fluffelpuff/RoueX/kernel"
+	"github.com/fluffelpuff/RoueX/kernel/extra"
 	"github.com/fluffelpuff/RoueX/utils"
 	"github.com/fxamacker/cbor"
 )
@@ -255,7 +256,7 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _start_ping_pong_process(pkey *btcec.Public
 	}
 
 	// Das Ping Paket wird über das Netzwerk übermittelt
-	_, has_route, err := obj._kernel.EnterBytesEncryptAndSendL2PackageToNetwork(0, encoded_ping_package, pkey)
+	sstate, err := obj._kernel.EnterBytesEncryptAndSendL2PackageToNetwork(0, encoded_ping_package, pkey)
 	if err != nil {
 		// Der Ping Prozess wird wieder entfernt
 		obj._remove_ping_process(rx_entry, process_api_conn)
@@ -264,13 +265,23 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _start_ping_pong_process(pkey *btcec.Public
 		return nil, fmt.Errorf("_start_ping_pong_process: " + err.Error())
 	}
 
-	// Sollte keine Route vorhanden sein, wird der Vorgang abgebrochen
-	if !has_route {
-		// Der Pingvorgang wird entfernt
-		obj._remove_ping_process(rx_entry, process_api_conn)
+	// Das Rückgabeobjekt wird erstellt
+	reval := make(map[string]interface{})
 
-		// Der Fehler wird zurückgegeben
-		return nil, fmt.Errorf("no route found")
+	// Es wird gewartet bis sich der Status des Paketes geändert hat
+	for obj._kernel.IsRunning() && !rx_entry.isaborted() {
+		if sstate.GetState() != extra.WAIT {
+			break
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	// Es wird geprüft ob der Vorgang abgebrochen
+	if !rx_entry.isaborted() {
+		log.Printf("ROUEX_PING_PONG_PROTOCOL: ping process aborted. pid = %s\n", proc_id)
+		obj._remove_ping_process(rx_entry, process_api_conn)
+		reval["state"] = uint8(ABORTED)
+		return reval, nil
 	}
 
 	// Es wird auf die Antwort wird gewartet
@@ -282,9 +293,6 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _start_ping_pong_process(pkey *btcec.Public
 		// Der Fehler wird zurückgegeben
 		return nil, fmt.Errorf("_start_ping_pong_process: " + err.Error())
 	}
-
-	// Das Rückgabeobjekt wird erstellt
-	reval := make(map[string]interface{})
 
 	// Es wird geprüft das der Vorgang mit einem Response beantwortet wurde
 	switch state {
@@ -331,14 +339,9 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _enter_incomming_ping_package(ppp PingPongP
 	log.Println("ROUEX_PING_PONG_PROTOCOL: ping package recived. id = "+ppp.Id, "source = "+hex.EncodeToString(source.SerializeCompressed()))
 
 	// Das Ping Paket wird über das Netzwerk übermittelt
-	_, has_route, err := obj._kernel.EnterBytesEncryptAndSendL2PackageToNetwork(0, encoded_pong_package, source)
+	_, err = obj._kernel.EnterBytesEncryptAndSendL2PackageToNetwork(0, encoded_pong_package, source)
 	if err != nil {
 		return fmt.Errorf("sending error: " + err.Error())
-	}
-
-	// Sollte keine Route vorhanden sein, wird der Vorgang abgebrochen
-	if !has_route {
-		return fmt.Errorf("no route found")
 	}
 
 	// Der Vorgang wurde ohne Fehler durchgeführt

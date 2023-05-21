@@ -1,11 +1,13 @@
 package rerror
 
-type IOStateError struct{}
-
-func (m *IOStateError) Error() string {
-	return "boom"
+type IOStateError struct {
+	_msg string
 }
 
-func NewIOStateError() IOStateError {
-	return IOStateError{}
+func (m *IOStateError) Error() string {
+	return m._msg
+}
+
+func NewIOStateError(msg string) *IOStateError {
+	return &IOStateError{msg}
 }
