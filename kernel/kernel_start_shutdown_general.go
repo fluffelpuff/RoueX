@@ -163,8 +163,10 @@ func (obj *Kernel) Shutdown() {
 	// Sollte der Server ausgeführt werden wird gewartet ob alle Dienste ausgeführt wurden
 	if server_was_runed {
 		// Es wird gewartet bis alles geschlossen wurde
-		for !obj._is_base_closed() {
-			time.Sleep(1 * time.Millisecond)
+		for range time.Tick(1 * time.Millisecond) {
+			if obj._is_base_closed() {
+				break
+			}
 		}
 
 		// Die Datenbanken werden geschlossen
