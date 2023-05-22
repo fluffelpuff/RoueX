@@ -45,10 +45,24 @@ func (obj *KernelAPI) _ral() bool {
 
 // Gibt an ob die API noch ausgeführt wird
 func (obj *KernelAPI) _irn() bool {
+	// Es wird geprüft
 	obj._lock.Lock()
-	r := obj._is_running
-	obj._lock.Unlock()
-	return r
+	defer obj._lock.Unlock()
+
+	// Es wird geprüft ob ein Shutdown Signal eingegangen ist
+	if !obj._signal_shutdown {
+		return true
+	}
+
+	// Es wird geprüft ob die Verbindung vorhanden ist
+	for i := range obj._process_connections {
+		if obj._process_connections[i].IsConnected() {
+			return true
+		}
+	}
+
+	// Der Endgültüge Status wird zurückgegeben
+	return obj._is_running
 }
 
 // Handelt eine neue Verbindung
@@ -165,8 +179,10 @@ func (obj *KernelAPI) _close_by_kernel() {
 	obj._lock.Unlock()
 
 	// Wartet bis alle Verbindungen geschlossen wurden
-	for obj._irn() {
-		time.Sleep(1 * time.Millisecond)
+	for range time.Tick(1 * time.Millisecond) {
+		if !obj._irn() {
+			break
+		}
 	}
 
 	// Log

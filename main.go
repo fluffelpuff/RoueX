@@ -5,9 +5,6 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"os"
-	"os/signal"
-	"time"
 
 	"github.com/fluffelpuff/RoueX/ipoverlay"
 	"github.com/fluffelpuff/RoueX/kernel"
@@ -70,24 +67,8 @@ func main() {
 		panic(err)
 	}
 
-	// Der Kernel wird gestartet
-	if err := kernel_object.Start(); err != nil {
-		panic(err)
-	}
-
-	// Diese Funktion wird ausgeführt sobald STRG-C gedrückt wird
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		kernel_object.Shutdown()
-	}()
-
-	// Dieser Thread wird ausgeführt um die Ausgehenden Verbindungen vorzubereiten
-	go outboundHandler(kernel_object)
-
-	// Diese Schleife wird solange ausgefürth, solange der Kernel ausgeführt wird
-	for kernel_object.IsRunning() {
-		time.Sleep(1 * time.Millisecond)
+	// Der Kernel wird ausgeführt
+	if err := kernel_object.Serve(); err != nil {
+		fmt.Println(err)
 	}
 }

@@ -404,6 +404,15 @@ func (obj *WebsocketKernelConnection) _write_operation() {
 
 	// Ruft das erste Paket ab und versendet es
 	get_pckg := func(c *WebsocketKernelConnection) (*extra.PackageSendState, []byte, bool) {
+		// Der Threadlock wird ausgeführt
+		c._lock.Lock()
+		defer c._lock.Unlock()
+
+		// Es wird geprüft ob ein Paket verfügbar ist
+		if len(c._write_buffer) == 0 {
+			return nil, nil, false
+		}
+
 		return nil, nil, false
 	}
 
@@ -417,11 +426,18 @@ func (obj *WebsocketKernelConnection) _write_operation() {
 
 		// Die Daten werden gesendet
 		if err := obj.Write(data); err != nil {
+			// Es wird Signalisiert dass die Daten nicht gesendet werden konnten
+			c_state.SetFinallyState(extra.DROPED)
 
+			// Der Vorgang wird beendet
+			continue
 		}
 
 		// Es wird Signalisiert dass das Paket erfolgreich gesendet wurde
 		c_state.SetFinallyState(extra.SEND)
+
+		// Es wird 100 Nanaosekunden gewartet
+		time.Sleep(100 * time.Nanosecond)
 	}
 }
 

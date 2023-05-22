@@ -35,10 +35,17 @@ type WebsocketKernelServerEP struct {
 
 // Gibt an ob der Server ausgeführt wird
 func (obj *WebsocketKernelServerEP) _is_rn() bool {
+	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
-	r := obj._is_running
-	obj._lock.Unlock()
-	return r
+	defer obj._lock.Unlock()
+
+	// Sollte noch mehr als 1 Proc ausgeführt werden, wird ein True zurückgegebn
+	if obj._total_proc > 0 {
+		return true
+	}
+
+	// Der Aktuelle Running Status wird zurückgegeb
+	return obj._is_running
 }
 
 // Registriert den Kernel im Module
@@ -79,26 +86,22 @@ func (obj *WebsocketKernelServerEP) _start_tcp_tcp_server() error {
 		Handler: http.HandlerFunc(obj.upgradeHTTPConnAndRegister),
 	}
 
-	// Es wird versucht den Threadlock zu sperren
-	is_use := obj._lock.TryLock()
-
-	// Es wird Signalisiert dass ein Protokoll Thread läuft
-	obj._total_proc++
-
-	// Sollte der Threadlock verwenden wurden sein, wird er freigegeben
-	if is_use {
-		obj._lock.Unlock()
-	}
-
 	// Gibt an ob der eigentliche Server ausgeführt wird
-	is_running, thr := false, new(sync.Mutex)
+	is_running := false
 
 	// Der Server wurde gestartet
 	go func() {
 		// Es wird signalisiert das der Thrad ausgeführt wird
-		thr.Lock()
+		obj._lock.Lock()
+
+		// Es wird angegeben das der Server ausgeführt wird
 		is_running = true
-		thr.Unlock()
+
+		// Es wird Signalisiert dass ein weiterer Server Thread ausgeführt wird
+		obj._total_proc++
+
+		// Der Thread wird freigegeben
+		obj._lock.Unlock()
 
 		// Der Log wird angezeigt
 		log.Printf("WebsocketKernelServerEP: new tcp based server started. id = %s, endpoint = %s\n", obj._obj_id, "0.0.0.0:"+strconv.Itoa(obj._port))
@@ -106,21 +109,17 @@ func (obj *WebsocketKernelServerEP) _start_tcp_tcp_server() error {
 			log.Fatalf("listen: %s\n", err)
 		}
 
-		// Es wird signalisiert das der Thread nicht mehr ausgeführt wird
-		thr.Lock()
-		is_running = false
-		thr.Unlock()
-
 		// Es wird versucht den Threadlock zu sperren
-		is_use = obj._lock.TryLock()
+		obj._lock.Lock()
+
+		// Es wird Signalisiert dass der Server beendet wurde
+		is_running = false
 
 		// Es wird Signalisiert dass ein Protokoll Thread weniger läuft
 		obj._total_proc--
 
-		// Sollte der Threadlock verwenden wurden sein, wird er freigegeben
-		if is_use {
-			obj._lock.Unlock()
-		}
+		// Der Threadlock wird freigeben
+		obj._lock.Unlock()
 
 		// Log
 		log.Printf("WebsocketKernelServerEP: closed. id = %s, endpoint = %s\n", obj._obj_id, "0.0.0.0:"+strconv.Itoa(obj._port))
@@ -128,14 +127,16 @@ func (obj *WebsocketKernelServerEP) _start_tcp_tcp_server() error {
 
 	// Diese Funktion gibt an dass der Server noch läuft
 	server_running := func() bool {
-		thr.Lock()
-		r := is_running
-		thr.Unlock()
-		return r
+		// Der Threadlock wird verwendet
+		obj._lock.Lock()
+		defer obj._lock.Unlock()
+
+		// Der Status wird zurückgegeben
+		return is_running
 	}
 
-	// Es wird 30 MS gewartet ob der Server noch ausgeführt wird
-	for i := 0; i < 25; i++ {
+	// Es wird 10 MS gewartet ob der Server noch ausgeführt wird
+	for i := 0; i < 10; i++ {
 		time.Sleep(1 * time.Millisecond)
 	}
 
@@ -183,14 +184,14 @@ func (obj *WebsocketKernelServerEP) Start() error {
 	// Die Channel werden zurückgegeben
 	result_chan := make(chan error)
 
-	// Es wird eine neuer Thread gestartet, innerhalb dieses Threads wird der HTTP Server ausgeführt
+	// Es wird eine neuer Thread gestartet um die Einzelnen Server Protokollthreads zu starten
 	go func(wsbo *WebsocketKernelServerEP, state chan error) {
-		// Es wird Signalisiert dass der Server läuft
-		wsbo._lock.Lock()
-
 		// Die Server werden gestartet
 		tcp_err := obj._start_tcp_tcp_server()
 		quic_err := obj._start_quic_server()
+
+		// Es wird Signalisiert dass der Server läuft
+		wsbo._lock.Lock()
 
 		// Es wird geprüft ob mindestens 1 Server gestartet wurde
 		if tcp_err != nil && quic_err != nil {
@@ -239,8 +240,8 @@ func (obj *WebsocketKernelServerEP) Start() error {
 		time.Sleep(1 * time.Millisecond)
 	}
 
-	// Es wird 30 MS gewartet
-	for i := 0; i < 25; i++ {
+	// Es wird 10 MS gewartet
+	for i := 0; i < 10; i++ {
 		time.Sleep(1 * time.Millisecond)
 	}
 

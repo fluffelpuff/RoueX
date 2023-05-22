@@ -3,14 +3,19 @@
 package kernel
 
 import (
-	"log"
 	"time"
 )
 
 // Gibt an ob der Kernel erfolgreich heruntergefahren wurde
 func (obj *Kernel) _is_closed() bool {
+	// Es wird geprüft ob der Kernel noch ausgeführt wird
+	if obj.IsRunning() {
+		return false
+	}
+
 	// Der Threadlock wird verwendet
 	obj._lock.Lock()
+	defer obj._lock.Unlock()
 
 	// Gibt an wieviele API Interfaces ausgeführt wird
 	total_interface := 0
@@ -31,9 +36,6 @@ func (obj *Kernel) _is_closed() bool {
 			total_server_modules++
 		}
 	}
-
-	// Der Threadlock wird entsperrt
-	obj._lock.Unlock()
 
 	// Die Daten werden zurückgegeben
 	return total_interface == 0 && total_server_modules == 0
@@ -134,7 +136,4 @@ func (obj *Kernel) Shutdown() {
 		obj._routing_table.Shutdown()
 		obj._trusted_relays.Shutdown()
 	}
-
-	// Log
-	log.Printf("Kernel: go by!\n")
 }
