@@ -71,4 +71,7 @@ func main() {
 	if err := kernel_object.Serve(); err != nil {
 		fmt.Println(err)
 	}
+
+	// Gibt den God by text aus
+	fmt.Println("God by")
 }

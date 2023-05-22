@@ -33,6 +33,7 @@ type Kernel struct {
 	_temp_ecdh_keys        map[string][]byte
 	_protocols             []*kernel_package_type_function_entry
 	_memory                kernel_package_buffer
+	_shutdown_complete     bool
 }
 
 // Wird verwendet um zu Warten bis der Kernel läuft
@@ -135,6 +136,7 @@ func CreateUnixKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 		_temp_key_pairs:        make(map[string]*secp256k1.PrivateKey),
 		_socket_path:           static.GetFilePathFor(static.API_SOCKET),
 		_protocols:             []*kernel_package_type_function_entry{},
+		_shutdown_complete:     false,
 	}
 
 	// Die API Schnitstelle wird im Kernel Registriert

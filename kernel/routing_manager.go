@@ -23,6 +23,7 @@ type RoutingManagerEntry struct {
 type RelayRoutesList struct {
 }
 
+// Gibt die Anzahl alle Verbindungen aus
 func (o *RelayRoutesList) GetTotalConnections() uint64 {
 	return 0
 }
@@ -36,10 +37,15 @@ type RoutingManager struct {
 
 // Wird verwendet um den Routing Manager herunterzufahren
 func (obj *RoutingManager) Shutdown() {
+	// Log
 	log.Println("RoutingManager: shutingdown routing table manager...")
+
+	// Der Threadlock wird verwendet
 	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
+	// Die Datenbank wird geschlossen
 	obj._db.Close()
-	obj._lock.Unlock()
 }
 
 // Gibt die Routen für einen Spiziellen Relay aus

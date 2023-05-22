@@ -61,7 +61,6 @@ func handleSystemEvents(core *Kernel) {
 	switch sig {
 	case syscall.SIGINT:
 		core.Shutdown()
-		fmt.Println("God by")
 	case syscall.SIGTERM:
 		fmt.Println("TERM")
 		break
@@ -85,7 +84,7 @@ func (obj *Kernel) Serve() error {
 
 	// Diese Schleife wird solange ausgefürth, solange der Kernel ausgeführt wird
 	for range time.Tick(1 * time.Millisecond) {
-		if obj._is_closed() {
+		if obj._is_full_closed() {
 			break
 		}
 	}

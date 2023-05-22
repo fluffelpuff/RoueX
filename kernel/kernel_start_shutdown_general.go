@@ -7,7 +7,7 @@ import (
 )
 
 // Gibt an ob der Kernel erfolgreich heruntergefahren wurde
-func (obj *Kernel) _is_closed() bool {
+func (obj *Kernel) _is_base_closed() bool {
 	// Es wird geprüft ob der Kernel noch ausgeführt wird
 	if obj.IsRunning() {
 		return false
@@ -37,8 +37,43 @@ func (obj *Kernel) _is_closed() bool {
 		}
 	}
 
+	// Es wird geprüft ob alle Interfaces geschlossen wurden
+	if total_interface != 0 || total_server_modules != 0 {
+		return false
+	}
+
 	// Die Daten werden zurückgegeben
-	return total_interface == 0 && total_server_modules == 0
+	return true
+}
+
+// Gibt an ob der Kernel erfolgreich heruntergefahren wurde
+func (obj *Kernel) _is_full_closed() bool {
+	// Es wird geprüft ob die basis beendet wurde
+	if !obj._is_base_closed() {
+		return false
+	}
+
+	// Der Threadlock wird verwendet
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
+	// Es wird geprüft ob der Shutdown vorgang erfolgreich druchgeführt wurde
+	if !obj._shutdown_complete {
+		return false
+	}
+
+	// Die Daten werden zurückgegeben
+	return true
+}
+
+// Signalisiert das der Server vollständig heruntergefahren wurde
+func (obj *Kernel) _signal_shutdown_complete() {
+	// Wird verwendet um den Threadlock zu Sperren
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
+	// Es wird Signalisiert dass der Shutdown vollständig war
+	obj._shutdown_complete = true
 }
 
 // Wird ausgeführt wenn das Programm als Dienst ausgeführt wird
@@ -128,12 +163,15 @@ func (obj *Kernel) Shutdown() {
 	// Sollte der Server ausgeführt werden wird gewartet ob alle Dienste ausgeführt wurden
 	if server_was_runed {
 		// Es wird gewartet bis alles geschlossen wurde
-		for !obj._is_closed() {
+		for !obj._is_base_closed() {
 			time.Sleep(1 * time.Millisecond)
 		}
 
 		// Die Datenbanken werden geschlossen
 		obj._routing_table.Shutdown()
 		obj._trusted_relays.Shutdown()
+
+		// Es wird Signalisiert dass der Kernel vollständig beendet wurde
+		obj._signal_shutdown_complete()
 	}
 }
