@@ -20,7 +20,7 @@ import (
 // Stellt einen write_buffer eintrag dar
 type writer_buffer_entry struct {
 	data   []byte
-	sstate extra.PackageSendState
+	sstate *extra.PackageSendState
 	size   uint64
 }
 
@@ -178,6 +178,11 @@ func (obj *WebsocketKernelConnection) _enter_incomming_data_package(data []byte)
 	if err != nil {
 		log.Println("WebsocketKernelConnection: error by reading, package droped. error = "+err.Error(), "connection = "+obj._object_id)
 		return
+	}
+
+	// Es wird geprüft ob die Signatur korrekt ist
+	if !readed_package.ValidateSignature() {
+		log.Println("WebsocketKernelConnection: error by reading, package droped. error = invalid package siganture. connection = " + obj._object_id)
 	}
 
 	// Das Paket wird an den Kernel übergeben
@@ -413,7 +418,15 @@ func (obj *WebsocketKernelConnection) _write_operation() {
 			return nil, nil, false
 		}
 
-		return nil, nil, false
+		// Das Paket wird aus dem Buffer abgerufen
+		n_package := c._write_buffer[0]
+
+		// Das Paket wird aus dem Buffer entfernt
+		c._write_buffer = append(c._write_buffer[:0], c._write_buffer[1:]...)
+		obj._writer_buffer_total -= uint64(len(n_package.data))
+
+		// Die Daten werden zurückgegeben
+		return n_package.sstate, n_package.data, true
 	}
 
 	// Diese Schleife wird solange ausgeführt bis keine Nachrichten mehr verfügbar sind
@@ -889,7 +902,7 @@ func (obj *WebsocketKernelConnection) EnterSendableData(data []byte) (*extra.Pac
 	}
 
 	// Der Eintrag wird in dem Buffer zwischengespeichert
-	obj._write_buffer = append(obj._write_buffer, &writer_buffer_entry{data: data, sstate: *revobj, size: uint64(len(data))})
+	obj._write_buffer = append(obj._write_buffer, &writer_buffer_entry{data: data, sstate: revobj, size: uint64(len(data))})
 	obj._writer_buffer_total += uint64(len(data))
 
 	// Der Vorgang wurde ohne Fehler erfolreich fertigestellt
@@ -903,7 +916,7 @@ func (obj *WebsocketKernelConnection) CannUseToWrite() bool {
 	defer obj._lock.Unlock()
 
 	// Der Vorgang wurde ohne Fehler erfolreich fertigestellt
-	return len(obj._write_buffer) >= 2
+	return !(len(obj._write_buffer) >= 2)
 }
 
 // Erstellt ein neues Kernel Sitzungs Objekt

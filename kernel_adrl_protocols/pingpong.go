@@ -269,20 +269,28 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _start_ping_pong_process(pkey *btcec.Public
 	reval := make(map[string]interface{})
 
 	// Es wird gewartet bis sich der Status des Paketes geändert hat
-	for obj._kernel.IsRunning() && !rx_entry.isaborted() {
+	for range time.Tick(1 * time.Millisecond) {
 		if sstate.GetState() != extra.WAIT {
 			break
 		}
-		time.Sleep(1 * time.Millisecond)
+		if !obj._kernel.IsRunning() {
+			break
+		}
+		if rx_entry.isaborted() {
+			break
+		}
 	}
 
 	// Es wird geprüft ob der Vorgang abgebrochen
-	if !rx_entry.isaborted() {
+	if rx_entry.isaborted() {
 		log.Printf("ROUEX_PING_PONG_PROTOCOL: ping process aborted. pid = %s\n", proc_id)
 		obj._remove_ping_process(rx_entry, process_api_conn)
 		reval["state"] = uint8(ABORTED)
 		return reval, nil
 	}
+
+	// Log
+	log.Printf("ROUEX_PING_PONG_PROTOCOL: ping package transmitted. pid = %s\n", proc_id)
 
 	// Es wird auf die Antwort wird gewartet
 	state, err := rx_entry.waitfnc()

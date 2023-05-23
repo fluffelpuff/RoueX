@@ -122,13 +122,25 @@ func (obj *Kernel) EnterLocallyPackage(pckge *addresspackages.PreAddressLayerPac
 	return nil
 }
 
-// Nimmt eintreffende Layer 2 Pakete entgegen
-func (obj *Kernel) EnterL2Package(pckge *addresspackages.FinalAddressLayerPackage, conn RelayConnection) error {
-	// Es wird geprüft ob die Signatur korrekt ist
-	if !pckge.ValidateSignature() {
-		return fmt.Errorf("EnterL2Package: 1: invalid package signature")
+// Nimmt ein Plain PCI Paket entgegen
+func (obj *Kernel) EnterPlainPCIPackage(pckge *addresspackages.FinalAddressLayerPackage, conn RelayConnection) {
+	// Es wird geprüft ob der Kernel noch ausgeführt wird
+	if !obj.IsRunning() {
+		return
 	}
 
+	// Es wird versucht die Inneren Daten einzulesen
+}
+
+// Entschlüsselt ein Lokales Paket und Speichert es im Puffer
+func (obj *Kernel) DecryptLocallyPackageToBuffer(pckge *addresspackages.FinalAddressLayerPackage) error {
+	// Es wird geprüft ob das Paket für diesen Node bestimmt ist
+	fmt.Println("LOCAL_PACKAGE_RECIVED")
+	return nil
+}
+
+// Nimmt eintreffende Layer 2 Pakete entgegen
+func (obj *Kernel) EnterL2Package(pckge *addresspackages.FinalAddressLayerPackage, conn RelayConnection) error {
 	// Es wird geprüft ob der Kernel noch ausgeführt wird
 	if !obj.IsRunning() {
 		return fmt.Errorf("EnterL2Package: kernel is not running")
@@ -150,15 +162,21 @@ func (obj *Kernel) EnterL2Package(pckge *addresspackages.FinalAddressLayerPackag
 		return fmt.Errorf("EnterL2Package: kernel is not running")
 	}
 
-	// Das Paket wird an das Netzwerk gesendet, sofern eine Route vorhanden ist, ansonsten wird das Paket verworfen
-	_, err := obj.WriteL2PackageByNetworkRoute(pckge)
-	if err != nil {
-		return fmt.Errorf("EnterL2Package: 2: " + err.Error())
+	// Es wird geprüft ob es sich um Nicht verschlüsseltes PCI Paket handelt
+	if pckge.Plain && pckge.PCI {
+		// Das Paket wird Lokal weiterverabeitet
+		obj.EnterPlainPCIPackage(pckge, conn)
 	}
 
 	// Es wird geprüft ob der Kernel noch ausgeführt wird
 	if !obj.IsRunning() {
 		return fmt.Errorf("EnterL2Package: kernel is not running")
+	}
+
+	// Das Paket wird an das Netzwerk gesendet, sofern eine Route vorhanden ist, ansonsten wird das Paket verworfen
+	_, err := obj.WriteL2PackageByNetworkRoute(pckge)
+	if err != nil {
+		return fmt.Errorf("EnterL2Package: 2: " + err.Error())
 	}
 
 	// Der Vorgang wurde ohne Fehler beendet
@@ -175,12 +193,6 @@ func (obj *Kernel) WriteL2PackageByNetworkRoute(pckge *addresspackages.FinalAddr
 
 	// Das Paket wurde erfolgreich an den Routing Manager übergeben
 	return sstate, nil
-}
-
-// Entschlüsselt ein Lokales Paket und Speichert es im Puffer
-func (obj *Kernel) DecryptLocallyPackageToBuffer(pckge *addresspackages.FinalAddressLayerPackage) error {
-	// Es wird geprüft ob das Paket für diesen Node bestimmt ist
-	return nil
 }
 
 // Verschlüsselt ein nicht Verschlüsseltes Layer 2 Paket, Signiert es und Sendet es ins Netzwerk

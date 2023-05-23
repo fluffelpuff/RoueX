@@ -323,7 +323,7 @@ func (obj *RelayConnectionEntry) RegisterRouteList(rlist *RelayRoutesList) bool 
 func (obj *RelayConnectionEntry) BufferL2PackageAndWrite(pckg *addresspackages.FinalAddressLayerPackage) (*extra.PackageSendState, error) {
 	// Es wird geprüft ob eine Aktive Verbindung verfügbar ist
 	if !obj.HasActiveConnection() {
-		return nil, rerror.NewIOStateError("has no active connection, fotze")
+		return nil, rerror.NewIOStateError("has no active connection")
 	}
 
 	// Das Paket wird in Bytes umgewandelt
@@ -380,6 +380,15 @@ func (obj *RelayConnectionEntry) BufferL2PackageAndWrite(pckg *addresspackages.F
 	// Sollte keine Verbindung vorhanden sein, wird der Vorgang abgebrochen
 	if found_conn == nil {
 		return nil, rerror.NewIOStateError("no connection found")
+	}
+
+	// Log
+	if found_conn.GetIOType() == OUTBOUND {
+		log.Printf("RelayConnectionEntry: outbound connection selected. connection = %s\n", found_conn.GetObjectId())
+	} else if found_conn.GetIOType() == INBOUND {
+		log.Printf("RelayConnectionEntry: inbound connection selected. connection = %s\n", found_conn.GetObjectId())
+	} else {
+		panic("internal error, unkown connection io mode")
 	}
 
 	// Die Daten werden an die Verbindung übergeben

@@ -24,3 +24,15 @@ func (c *PlainInnerData) ToBytes() ([]byte, error) {
 	// Die Daten werden zurückgegeben
 	return b_data, nil
 }
+
+// Es wird versucht die Inneren Daten einzulesen
+func PlainInnerFromBytes(pbytes []byte) (*PlainInnerData, error) {
+	// Es wird versucht das Paket einzulesen
+	var v PlainInnerData
+	if err := cbor.Unmarshal(pbytes, &v); err != nil {
+		return nil, fmt.Errorf("PlainInnerFromBytes: 1: " + err.Error())
+	}
+
+	// Die Daten werden zurückgegebn
+	return &v, nil
+}

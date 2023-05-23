@@ -1,6 +1,8 @@
 package extra
 
-import "sync"
+import (
+	"sync"
+)
 
 type SendState uint8
 
@@ -30,7 +32,7 @@ func (obj *PackageSendState) SetFinallyState(fstate SendState) {
 	if obj._state != WAIT {
 		return
 	}
-	obj._state = fstate
+	obj._state = SendState(fstate)
 }
 
 // Erzeugt ein neues Package Sendstate
