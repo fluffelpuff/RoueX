@@ -12,7 +12,7 @@ import (
 )
 
 // Stellt den Eintrag für einen Funktionstypen Hadnler dar
-type kernel_package_type_function_entry struct {
+type KernelPackageProtocolEntry struct {
 	Ptf KernelTypeProtocol
 	Tpe uint8
 }
@@ -28,24 +28,16 @@ func (obj *Kernel) RegisterNewKernelTypeProtocol(tpe uint8, pckgtf KernelTypePro
 		return fmt.Errorf("RegisterNewKernelTypeProtocol: 1: kernel is running, aborted")
 	}
 
-	// Es wird geprüft ob der Eintrag bereits hinzugefügt wurde
-	var has_found *kernel_package_type_function_entry
-	for i := range obj._protocols {
-		if obj._protocols[i].Tpe == tpe {
-			has_found = obj._protocols[i]
-			break
-		}
-	}
-
-	// Sollte ein passender Wert vorhanden sein, wird der Vorgang abgebrochen
-	if has_found != nil {
+	// Es wird geprüft ob es bereits eine Eintrag für das Protokoll gibt
+	_, hfound := obj._protocols[int(tpe)]
+	if hfound {
 		obj._lock.Unlock()
 		return fmt.Errorf("RegisterNewKernelTypeProtocol: 2: type always registred")
 	}
 
 	// Das Objekt wird registriert
-	nwo := &kernel_package_type_function_entry{Tpe: tpe, Ptf: pckgtf}
-	obj._protocols = append(obj._protocols, nwo)
+	nwo := &KernelPackageProtocolEntry{Tpe: tpe, Ptf: pckgtf}
+	obj._protocols[int(tpe)] = nwo
 
 	// Der Threadlock wird freigegeben
 	obj._lock.Unlock()
@@ -66,27 +58,16 @@ func (obj *Kernel) RegisterNewKernelTypeProtocol(tpe uint8, pckgtf KernelTypePro
 func (obj *Kernel) GetRegisteredKernelTypeProtocol(tpe uint8) (KernelTypeProtocol, error) {
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
+	defer obj._lock.Unlock()
 
 	// Es wird geprüft ob der Eintrag bereits hinzugefügt wurde
-	var has_found *kernel_package_type_function_entry
-	for i := range obj._protocols {
-		if obj._protocols[i].Tpe == tpe {
-			has_found = obj._protocols[i]
-			break
-		}
-	}
-
-	// Sollte kein passender Typ gefunden werden, wird der Vorgang abegbrochen
-	if has_found == nil {
-		obj._lock.Unlock()
+	re, has_found := obj._protocols[int(tpe)]
+	if !has_found {
 		return nil, fmt.Errorf("GetRegisteredKernelTypeProtocol: 2: type always registred")
 	}
 
-	// Der Threadlock wird freigegeben
-	obj._lock.Unlock()
-
 	// Die Daten werden zurückgegeben
-	return has_found.Ptf, nil
+	return re.Ptf, nil
 }
 
 // Nimmt Lokale Pakete entgegen und verarbeitet sie

@@ -15,11 +15,11 @@ type APIConnectionLiveService interface {
 
 // Stellt den Verbindungs Wrapper dar
 type APIProcessConnectionWrapper struct {
-	id           string
-	conn         net.Conn
-	lock         *sync.Mutex
-	isconn       bool
-	live_service []APIConnectionLiveService
+	id          string
+	conn        net.Conn
+	lock        *sync.Mutex
+	isconn      bool
+	service_map map[string]APIConnectionLiveService
 }
 
 // Ließt Daten aus der Verbindung
@@ -53,30 +53,36 @@ func (c *APIProcessConnectionWrapper) IsConnected() bool {
 }
 
 // Registriert einen "Service" welcher geschlossen wird sobald die Verbindung zum Prozess getrennt wird
-func (c *APIProcessConnectionWrapper) AddProcessInvigoratingService(new_lservice APIConnectionLiveService) error {
+func (c *APIProcessConnectionWrapper) AddProcessInvigoratingService(new_lservice APIConnectionLiveService) {
+	// Der Threadlock wird verwendet
 	c.lock.Lock()
-	c.live_service = append(c.live_service, new_lservice)
-	c.lock.Unlock()
+	defer c.lock.Unlock()
+
+	// Die Daten werden abgespeichert
+	c.service_map[new_lservice.GetId()] = new_lservice
+
+	// Log
 	log.Printf("APIProcessConnectionWrapper: add service. sid = %s, process = %s\n", new_lservice.GetId(), c.GetObjectId())
-	return nil
 }
 
 // Entfernt einen "Service"
-func (c *APIProcessConnectionWrapper) RemoveProcessInvigoratingService(new_lservice APIConnectionLiveService) error {
-	found_i := -1
+func (c *APIProcessConnectionWrapper) RemoveProcessInvigoratingService(new_lservice APIConnectionLiveService) {
+	// Der Threadlock wird verwendet
 	c.lock.Lock()
-	for i := range c.live_service {
-		if c.live_service[i].GetId() == new_lservice.GetId() {
-			found_i = i
-			break
-		}
+	defer c.lock.Unlock()
+
+	// Es wird ermittet ob es einen passenden Dienst in dieser Verbindung gibt
+	_, found := c.service_map[new_lservice.GetId()]
+	if !found {
+		log.Printf("APIProcessConnectionWrapper: cant remove unkown service. sid = %s, process = %s\n", new_lservice.GetId(), c.GetObjectId())
+		return
 	}
-	if found_i > -1 {
-		c.live_service = append(c.live_service[:found_i], c.live_service[found_i+1:]...)
-		log.Printf("APIProcessConnectionWrapper: remove service. sid = %s, process = %s\n", new_lservice.GetId(), c.GetObjectId())
-	}
-	c.lock.Unlock()
-	return nil
+
+	// Der Eintrag wird entfernt
+	delete(c.service_map, new_lservice.GetId())
+
+	// Log
+	log.Printf("APIProcessConnectionWrapper: remove service. sid = %s, process = %s\n", new_lservice.GetId(), c.GetObjectId())
 }
 
 // Gibt die Objekt ID aus
@@ -86,11 +92,16 @@ func (c *APIProcessConnectionWrapper) GetObjectId() string {
 
 // Signalisiert dass alle Prozesse geschlossen werden sollen
 func (c *APIProcessConnectionWrapper) Kill() {
+	// Der Threadlock wird verwendet
 	c.lock.Lock()
-	total := len(c.live_service)
-	for i := range c.live_service {
-		c.live_service[i].Close()
+	defer c.lock.Unlock()
+
+	// Es werden alle Dienste durch Iterriert
+	total := len(c.service_map)
+	for i := range c.service_map {
+		c.service_map[i].Close()
 	}
-	c.lock.Unlock()
+
+	// Log
 	log.Println("APIProcessConnectionWrapper: process api connection closed. id = "+c.id, "total = "+strconv.Itoa(total))
 }

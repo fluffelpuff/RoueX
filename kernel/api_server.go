@@ -74,7 +74,7 @@ func (obj *KernelAPI) _handle_conn(conn net.Conn) {
 	process_id := utils.RandStringRunes(16)
 
 	// Das Wrapper Objekt wird erzeugt
-	wrapper_obj := &APIProcessConnectionWrapper{conn: conn, lock: new(sync.Mutex), isconn: true, id: process_id}
+	wrapper_obj := &APIProcessConnectionWrapper{conn: conn, lock: new(sync.Mutex), isconn: true, id: process_id, service_map: make(map[string]APIConnectionLiveService)}
 
 	// Die Funktionen werden bereitgestellt
 	pkf := &Kf{_kernel: obj._kernel, _process_id: process_id, _connection: wrapper_obj}

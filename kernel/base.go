@@ -31,7 +31,7 @@ type Kernel struct {
 	_api_interfaces        []*KernelAPI
 	_temp_key_pairs        map[string]*btcec.PrivateKey
 	_temp_ecdh_keys        map[string][]byte
-	_protocols             []*kernel_package_type_function_entry
+	_protocols             map[int]*KernelPackageProtocolEntry
 	_memory                kernel_package_buffer
 	_shutdown_complete     bool
 }
@@ -135,7 +135,7 @@ func CreateUnixKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 		_external_modules_path: static.GetFilePathFor(static.EXTERNAL_MODULES),
 		_temp_key_pairs:        make(map[string]*secp256k1.PrivateKey),
 		_socket_path:           static.GetFilePathFor(static.API_SOCKET),
-		_protocols:             []*kernel_package_type_function_entry{},
+		_protocols:             make(map[int]*KernelPackageProtocolEntry),
 		_shutdown_complete:     false,
 	}
 

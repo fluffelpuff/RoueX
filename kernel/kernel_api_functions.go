@@ -71,45 +71,27 @@ func (obj *Kernel) APIFetchAllRelays() ([]apiclient.ApiRelayEntry, error) {
 func (obj *Kernel) HasKernelProtocol(protocol_type uint8) bool {
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
+	defer obj._lock.Unlock()
 
-	// Es wird geprüft ob die
-	var found_value *KernelTypeProtocol
-	for i := range obj._protocols {
-		if obj._protocols[i].Tpe == protocol_type {
-			found_value = &obj._protocols[i].Ptf
-			break
-		}
-	}
-
-	// Der Threadlock wird freigegeben
-	obj._lock.Unlock()
+	// Es wird versucht das Protokoll abzurufen
+	_, found := obj._protocols[int(protocol_type)]
 
 	// Der Status wird wieder zurückgegeben
-	return found_value != nil
+	return found
 }
 
 // Gibt das Kernel Protokoll zurück
 func (obj *Kernel) GetKernelProtocolById(protocol_type uint8) (KernelTypeProtocol, error) {
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
+	defer obj._lock.Unlock()
 
-	// Es wird geprüft ob die
-	var found_value *KernelTypeProtocol
-	for i := range obj._protocols {
-		if obj._protocols[i].Tpe == protocol_type {
-			found_value = &obj._protocols[i].Ptf
-			break
-		}
-	}
-
-	// Der Threadlock wird freigegeben
-	obj._lock.Unlock()
-
-	// Sollte kein Protokoll gefunden wurden sein, wird der Vorgang abgebrochen
-	if found_value == nil {
+	// Es wird versucht das Protokoll abzurufen
+	prot, found := obj._protocols[int(protocol_type)]
+	if !found {
 		return nil, fmt.Errorf("unkown protocol")
 	}
 
 	// Die Daten werden ohne Fehler zurückgegeben
-	return *found_value, nil
+	return prot.Ptf, nil
 }

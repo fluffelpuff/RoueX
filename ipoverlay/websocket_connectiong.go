@@ -12,7 +12,6 @@ import (
 	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
 	"github.com/fluffelpuff/RoueX/kernel"
 	"github.com/fluffelpuff/RoueX/kernel/extra"
-	"github.com/fluffelpuff/RoueX/static"
 	"github.com/fluffelpuff/RoueX/utils"
 	"github.com/gorilla/websocket"
 )
@@ -48,8 +47,7 @@ type WebsocketKernelConnection struct {
 	_io_type                 kernel.ConnectionIoType
 	_rx_bytes                uint64
 	_tx_bytes                uint64
-	_write_buffer            []*writer_buffer_entry
-	_writer_buffer_total     uint64
+	_write_buffer            chan *writer_buffer_entry
 }
 
 // Registriert einen Kernel in der Verbindung
@@ -395,65 +393,6 @@ func (obj *WebsocketKernelConnection) _signal_disconnect() {
 	}
 }
 
-// Wird verwendet um die eigentlichen Daten zu senden
-func (obj *WebsocketKernelConnection) _write_operation() {
-	// Diese Funktion gibt an ob Daten Verfügbar sind
-	sendable_avail := func(c *WebsocketKernelConnection) bool {
-		// Der Threadlock wird ausgeführt
-		c._lock.Lock()
-		defer c._lock.Unlock()
-
-		// Der Aktuelle Status wird zurückgegeben
-		return len(c._write_buffer) > 0
-	}
-
-	// Ruft das erste Paket ab und versendet es
-	get_pckg := func(c *WebsocketKernelConnection) (*extra.PackageSendState, []byte, bool) {
-		// Der Threadlock wird ausgeführt
-		c._lock.Lock()
-		defer c._lock.Unlock()
-
-		// Es wird geprüft ob ein Paket verfügbar ist
-		if len(c._write_buffer) == 0 {
-			return nil, nil, false
-		}
-
-		// Das Paket wird aus dem Buffer abgerufen
-		n_package := c._write_buffer[0]
-
-		// Das Paket wird aus dem Buffer entfernt
-		c._write_buffer = append(c._write_buffer[:0], c._write_buffer[1:]...)
-		obj._writer_buffer_total -= uint64(len(n_package.data))
-
-		// Die Daten werden zurückgegeben
-		return n_package.sstate, n_package.data, true
-	}
-
-	// Diese Schleife wird solange ausgeführt bis keine Nachrichten mehr verfügbar sind
-	for sendable_avail(obj) {
-		// Das Aktuell zu sendene Paket wird abgerufen
-		c_state, data, avail := get_pckg(obj)
-		if !avail {
-			break
-		}
-
-		// Die Daten werden gesendet
-		if err := obj.Write(data); err != nil {
-			// Es wird Signalisiert dass die Daten nicht gesendet werden konnten
-			c_state.SetFinallyState(extra.DROPED)
-
-			// Der Vorgang wird beendet
-			continue
-		}
-
-		// Es wird Signalisiert dass das Paket erfolgreich gesendet wurde
-		c_state.SetFinallyState(extra.SEND)
-
-		// Es wird 100 Nanaosekunden gewartet
-		time.Sleep(100 * time.Nanosecond)
-	}
-}
-
 // Nimmt eintreffende Pakete entgegen
 func (obj *WebsocketKernelConnection) _start_thread_reader() error {
 	// Erzeugt den Funktions basierten Mutex
@@ -615,11 +554,20 @@ func (obj *WebsocketKernelConnection) _start_thread_writer() error {
 
 		// Die Schleife wird solange ausgeführt, bis die Verbindung getrennt wurde
 		for obj.IsConnected() {
-			// Die Operation wird druchgeführt
-			obj._write_operation()
+			// Die Aktuellen Daten werden ausgelesen
+			r_data := <-obj._write_buffer
 
-			// Es wird eine MS gewartet
-			time.Sleep(1 * time.Millisecond)
+			// Die Daten werden gesendet
+			if err := obj.Write(r_data.data); err != nil {
+				// Es wird Signalisiert dass die Daten nicht gesendet werden konnten
+				r_data.sstate.SetFinallyState(extra.DROPED)
+
+				// Der Vorgang wird beendet
+				continue
+			}
+
+			// Es wird Signalisiert dass das Paket erfolgreich gesendet wurde
+			r_data.sstate.SetFinallyState(extra.SEND)
 		}
 
 		// Es wird Signalisiert dass der Writer nicht mehr ausgeführt wird
@@ -887,23 +835,8 @@ func (obj *WebsocketKernelConnection) EnterSendableData(data []byte) (*extra.Pac
 	// Das Rückgabe Objekt wird gebaut
 	revobj := extra.NewPackageSendState()
 
-	// Der Threadlock wird ausgeführt
-	obj._lock.Lock()
-	defer obj._lock.Unlock()
-
-	// Es wird geprüft ob der Puffer über ausreichend Speicher verfügt
-	if len(obj._write_buffer) >= int(static.WS_MAX_PACKAGES) || obj._writer_buffer_total+uint64(len(data)) > static.WS_MAX_BYTES {
-		// Dem Eintrag wird Signalisiert dass die Daten verworfen wurden
-		obj._write_buffer[0].sstate.SetFinallyState(extra.DROPED)
-
-		// Der Eintrag wird aus dem Stack entfernt
-		obj._writer_buffer_total -= uint64(len(obj._write_buffer[1].data))
-		obj._write_buffer = append(obj._write_buffer[0:], obj._write_buffer[1:]...)
-	}
-
 	// Der Eintrag wird in dem Buffer zwischengespeichert
-	obj._write_buffer = append(obj._write_buffer, &writer_buffer_entry{data: data, sstate: revobj, size: uint64(len(data))})
-	obj._writer_buffer_total += uint64(len(data))
+	obj._write_buffer <- &writer_buffer_entry{data: data, sstate: revobj, size: uint64(len(data))}
 
 	// Der Vorgang wurde ohne Fehler erfolreich fertigestellt
 	return revobj, nil
@@ -931,7 +864,7 @@ func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id s
 		_otk_ecdh_key_id:       relay_otk_ecdh_key_id,
 		_ping:                  []uint64{ping_time},
 		_bandwith:              []float64{bandwith},
-		_write_buffer:          make([]*writer_buffer_entry, 0),
+		_write_buffer:          make(chan *writer_buffer_entry, 64),
 		_io_type:               io_type,
 		_conn:                  conn,
 		_signal_shutdown:       false,

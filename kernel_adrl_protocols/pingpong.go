@@ -39,6 +39,7 @@ type rouex_entry struct {
 	_id            string
 	_max_wait_time uint64
 	_aborted       bool
+	_wait_chan     chan bool
 	_start_time    time.Time
 	_finally_time  *time.Time
 	_kernel        *kernel.Kernel
@@ -97,11 +98,6 @@ func (obj *rouex_entry) isaborted() bool {
 
 // Diese Funktion wird solange ausgeführt, bis die Schleife beendet wurde
 func (obj *rouex_entry) waitfnc() (ping_state, error) {
-	// Diese Schleife wird solange ausgeführt bis der Ping Vorgang abgerlaufen ist oder beantwortet wurde
-	for obj._kernel.IsRunning() && !obj.maxwnend() && !obj.isaborted() && !obj.isfinn() {
-		time.Sleep(1 * time.Millisecond)
-	}
-
 	// Der Aktuelle Status wird ermittelt
 	if !obj._kernel.IsRunning() {
 		return CLOSED_BY_KERNEL, nil
@@ -117,8 +113,46 @@ func (obj *rouex_entry) waitfnc() (ping_state, error) {
 		return ABORTED, nil
 	}
 
-	// Der Vorgang wurde abgebrochen
-	return RESPONDED, nil
+	// Verwende ein select-Statement, um entweder den Channel-Empfang oder ein Timeout-Ereignis zu behandeln
+	select {
+	case msg := <-obj._wait_chan:
+		// Es wird geprüft ob der Vorgang abgebrochen wurde
+		if obj.isaborted() {
+			return ABORTED, nil
+		}
+
+		// Es wird geprüft ob die Nachricht beantwortet wurde
+		if msg {
+			// Es wird zurückgegeben ob die Daten empfangen wurden
+			return RESPONDED, nil
+		} else {
+			// Es wird geprüft ob der Vorgang abgebrochen wurde
+			if obj.isaborted() {
+				return ABORTED, nil
+			}
+
+			// Es wird signalisiert der Vorgang abgebrochen wurde
+			obj._lock.Lock()
+			obj._aborted = true
+			obj._lock.Unlock()
+
+			// Es wird Signalisiert dass der Vorgagn abgebrochen wurde
+			return ABORTED, nil
+		}
+	case <-time.After(time.Duration(obj._max_wait_time) * time.Millisecond):
+		// Es wird geprüft ob der Vorgang abgebrochen wurde
+		if obj.isaborted() {
+			return ABORTED, nil
+		}
+
+		// Es wird Siginalsiert dass der Vorgang abegrochen wurde
+		obj._lock.Lock()
+		obj._aborted = true
+		obj._lock.Unlock()
+
+		// Es wird Signalisiert dass es sich um ein Timeout handelt
+		return TIMEOUT, nil
+	}
 }
 
 // Gibt die Benötigte Zeit an
@@ -149,21 +183,40 @@ func (obj *rouex_entry) gtimems() uint64 {
 
 // Wird verwendet um zu Signalisieren dass eine Antwort eingetroffen ist
 func (obj *rouex_entry) signal_response() {
+	// Der Threadlock wird verwendet
 	obj._lock.Lock()
-	if obj._finally_time == nil {
-		tr := time.Now()
-		obj._finally_time = &tr
+	defer obj._lock.Unlock()
+
+	// Es wird geprüft ob der Aktuelle Stauts gesetzt wurde
+	if obj._finally_time != nil {
+		return
 	}
-	obj._lock.Unlock()
+
+	// Die Aktuelle Zeit wird gesetzt
+	tr := time.Now()
+	obj._finally_time = &tr
+
+	// Dem Chan wird Signalisiert dass das Paket eingetroffen ist
+	select {
+	case obj._wait_chan <- true:
+	default:
+	}
 }
 
 // Signalisiert dass der Vorgang geschlossen wurde
 func (obj *rouex_entry) Close() {
+	// Der Threadlock wird verwendet
 	obj._lock.Lock()
-	if !obj._aborted {
-		obj._aborted = true
+	defer obj._lock.Unlock()
+
+	// Es wird Signalisiert dass der Vorgang abgebrochen wurde
+	obj._aborted = true
+
+	// Dem Chan wird Signalisiert dass kein Paket eingetroffen ist
+	select {
+	case obj._wait_chan <- false:
+	default:
 	}
-	obj._lock.Unlock()
 }
 
 // Gibt die ID des Objektes zurück
@@ -173,7 +226,7 @@ func (obj *rouex_entry) GetId() string {
 
 // Stellt das Ping Protokoll dar
 type ROUEX_PING_PONG_PROTOCOL struct {
-	_open_processes []*rouex_entry
+	_open_processes map[string]*rouex_entry
 	_objid          string
 	_kernel         *kernel.Kernel
 	_lock           *sync.Mutex
@@ -185,18 +238,18 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _add_ping_process(ping_proc *rouex_entry, p
 	obj._lock.Lock()
 
 	// Speichert den Vorgang ab
-	obj._open_processes = append(obj._open_processes, ping_proc)
+	obj._open_processes[ping_proc._id] = ping_proc
 
 	// Der Threadlock wird freigegebeb
 	obj._lock.Unlock()
-
-	// Log
-	log.Printf("ROUEX_PING_PONG_PROTOCOL: register new ping process. pid = %s\n", ping_proc.GetId())
 
 	// Die Verbindung wird gloabl gespeichert
 	if process_api_conn != nil {
 		process_api_conn.AddProcessInvigoratingService(ping_proc)
 	}
+
+	// Log
+	log.Printf("ROUEX_PING_PONG_PROTOCOL: register new ping process. pid = %s\n", ping_proc.GetId())
 
 	// Der Vorgang wurde ohne Fehler durchgeführt
 	return nil
@@ -208,29 +261,24 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _remove_ping_process(ping_proc *rouex_entry
 	obj._lock.Lock()
 
 	// Der Ping Vorgang wird ermittelt
-	found_i := -1
-	for i := range obj._open_processes {
-		if obj._open_processes[i].GetId() == ping_proc.GetId() {
-			found_i = i
-			break
-		}
+	_, found := obj._open_processes[ping_proc._id]
+	if !found {
+		return
 	}
 
-	// Der Eintrag wird entfertn sofern vorhanden
-	if found_i > -1 {
-		obj._open_processes = append(obj._open_processes[:found_i], obj._open_processes[found_i+1:]...)
-	}
+	// Der Eintrag wird entfernt
+	delete(obj._open_processes, ping_proc._id)
 
 	// Der Threadlock wird freigegebeb
 	obj._lock.Unlock()
-
-	// Log
-	log.Printf("ROUEX_PING_PONG_PROTOCOL: ping process removed. pid = %s\n", ping_proc.GetId())
 
 	// Die Verbindung wird gloabl entfernt
 	if process_api_conn != nil {
 		process_api_conn.RemoveProcessInvigoratingService(ping_proc)
 	}
+
+	// Log
+	log.Printf("ROUEX_PING_PONG_PROTOCOL: ping process removed. pid = %s\n", ping_proc.GetId())
 }
 
 // Führt einen Ping Prozess durch
@@ -248,7 +296,16 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _start_ping_pong_process(pkey *btcec.Public
 	}
 
 	// Es wird ein neuer Ping Prozess wird erzeugt
-	rx_entry := &rouex_entry{_id: proc_id, _lock: new(sync.Mutex), _kernel: obj._kernel, _start_time: time.Now(), _max_wait_time: uint64(5), _objid: utils.RandStringRunes(12), _aborted: false}
+	rx_entry := &rouex_entry{
+		_id:            proc_id,
+		_lock:          new(sync.Mutex),
+		_kernel:        obj._kernel,
+		_start_time:    time.Now(),
+		_max_wait_time: uint64(1200),
+		_objid:         utils.RandStringRunes(12),
+		_wait_chan:     make(chan bool),
+		_aborted:       false,
+	}
 
 	// Der Vorgang wird abgespeichert
 	if err := obj._add_ping_process(rx_entry, process_api_conn); err != nil {
@@ -358,14 +415,25 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _enter_incomming_ping_package(ppp PingPongP
 
 // Nimmt eintreffende Pong Pakete entgegen
 func (obj *ROUEX_PING_PONG_PROTOCOL) _enter_incomming_pong_package(ppp PingPongPackage, source *btcec.PublicKey) error {
+	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
-	for i := range obj._open_processes {
-		if obj._open_processes[i]._id == ppp.Id {
-			log.Println("ROUEX_PING_PONG_PROTOCOL: pong package recived. id = "+ppp.Id, "source = "+hex.EncodeToString(source.SerializeCompressed()))
-			obj._open_processes[i].signal_response()
-		}
+	defer obj._lock.Unlock()
+
+	// Es wird geprüft ob es einen offnenen Vorgang gibt
+	pro, no_found := obj._open_processes[ppp.Id]
+	if !no_found {
+		return nil
 	}
-	obj._lock.Unlock()
+
+	// Es wird geprüft ob das Paket beretis beantwortet wurde
+	if pro.isfinn() {
+		return nil
+	}
+
+	// Es wird Signalisiert dass ein Pong empangen wurde
+	pro.signal_response()
+
+	// Der Vorgang wurde ohen Fehler durchgeführt
 	return nil
 }
 
@@ -435,5 +503,5 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) GetObjectId() string {
 
 // Erzeugt ein neues PING PONG Protokoll
 func NEW_ROUEX_PING_PONG_PROTOCOL_HANDLER() *ROUEX_PING_PONG_PROTOCOL {
-	return &ROUEX_PING_PONG_PROTOCOL{_lock: &sync.Mutex{}, _objid: utils.RandStringRunes(12), _open_processes: []*rouex_entry{}}
+	return &ROUEX_PING_PONG_PROTOCOL{_lock: &sync.Mutex{}, _objid: utils.RandStringRunes(12), _open_processes: make(map[string]*rouex_entry)}
 }
