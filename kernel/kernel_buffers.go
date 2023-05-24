@@ -17,7 +17,7 @@ const (
 // Stellt einen Eintrag dar
 type kernel_package_buffer_entry struct {
 	sstate *extra.PackageSendState
-	pckge  *addresspackages.PreAddressLayerPackage
+	pckge  *addresspackages.AddressLayerPackage
 }
 
 // Stellt ein Kernel Speicher dar
@@ -27,7 +27,7 @@ type kernel_package_buffer struct {
 }
 
 // Nimmt ein eintreffendes Paket entgegen
-func (obj *kernel_package_buffer) AddL2Package(pckge *addresspackages.PreAddressLayerPackage) (*extra.PackageSendState, error) {
+func (obj *kernel_package_buffer) AddL2Package(pckge *addresspackages.AddressLayerPackage) (*extra.PackageSendState, error) {
 	// Der Threadlock wird gesperrt
 	obj.thrLock.Lock()
 	defer obj.thrLock.Unlock()
@@ -52,7 +52,7 @@ func (obj *kernel_package_buffer) AddL2Package(pckge *addresspackages.PreAddress
 }
 
 // Gibt das nächste Paket aus dem Buffer zurück
-func (obj *kernel_package_buffer) GetNextPackage() *addresspackages.PreAddressLayerPackage {
+func (obj *kernel_package_buffer) GetNextPackage() *addresspackages.AddressLayerPackage {
 	// Der Threadlock wird gesperrt
 	obj.thrLock.Lock()
 	defer obj.thrLock.Unlock()

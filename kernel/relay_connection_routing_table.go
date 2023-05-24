@@ -318,7 +318,7 @@ func (obj *RelayConnectionRoutingTable) ShutdownByKernel() {
 }
 
 // Nimmt Pakete entgegen und Routet diese zu dem Entsprechenden Host
-func (obj *RelayConnectionRoutingTable) EnterPackageToRoutingManger(pckg *addresspackages.FinalAddressLayerPackage) (*extra.PackageSendState, error) {
+func (obj *RelayConnectionRoutingTable) EnterPackageToRoutingManger(pckg *addresspackages.SendableAddressLayerPackage) (*extra.PackageSendState, error) {
 	// Der Threadlock wird verwnendet
 	obj._lock.Lock()
 	defer obj._lock.Unlock()

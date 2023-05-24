@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 
@@ -89,9 +90,9 @@ func (obj *Kernel) GetRegisteredKernelTypeProtocol(tpe uint8) (KernelTypeProtoco
 }
 
 // Nimmt Lokale Pakete entgegen und verarbeitet sie
-func (obj *Kernel) EnterLocallyPackage(pckge *addresspackages.PreAddressLayerPackage) error {
-	// Es wird geprüft ob der Body mindestens 1 Byte groß ist
-	if len(pckge.Body) < 1 {
+func (obj *Kernel) EnterLocallyPackage(pckge *addresspackages.AddressLayerPackage) error {
+	// Es wird geprüft ob der Data mindestens 1 Byte groß ist
+	if len(pckge.Data) < 1 {
 		return fmt.Errorf("EnterLocallyPackage: 1: Invalid layer two package recived")
 	}
 
@@ -123,24 +124,93 @@ func (obj *Kernel) EnterLocallyPackage(pckge *addresspackages.PreAddressLayerPac
 }
 
 // Nimmt ein Plain PCI Paket entgegen
-func (obj *Kernel) EnterPlainPCIPackage(pckge *addresspackages.FinalAddressLayerPackage, conn RelayConnection) {
+func (obj *Kernel) EnterPlainPCIPackage(pckge *addresspackages.SendableAddressLayerPackage, conn RelayConnection) {
 	// Es wird geprüft ob der Kernel noch ausgeführt wird
 	if !obj.IsRunning() {
 		return
 	}
 
 	// Es wird versucht die Inneren Daten einzulesen
+	inner_data, errr := addresspackages.ReadInnerFrameFromBytes(pckge.Data)
+	if errr != nil {
+		log.Println("")
+		return
+	}
+
+	// Es wird geprüft um welches Protokoll es sich handelt
+	fmt.Println(inner_data)
+}
+
+// Nimmt ein nicht verschlüsseltes Lokales Paket entgegen
+func (obj *Kernel) PlainLocallyPackageToBuffer(pckge *addresspackages.SendableAddressLayerPackage) error {
+	// Es wird geprüft ob das Paket für diesen Node bestimmt ist
+	if !bytes.Equal(pckge.Reciver.SerializeCompressed(), obj.GetPublicKey().SerializeCompressed()) {
+		return fmt.Errorf("DecryptLocallyPackageToBuffer: unkown reciver address, is not locally address")
+	}
+
+	// Die Daten werden eingelesen
+	readed_inner, err := addresspackages.ReadInnerFrameFromBytes(pckge.Data)
+	if err != nil {
+		return fmt.Errorf("DecryptLocallyPackageToBuffer: " + err.Error())
+	}
+
+	// Das Paket zur Internen Verarbeitung wird erstellt
+	internal_package := &addresspackages.AddressLayerPackage{
+		Reciver:  pckge.Reciver,
+		Sender:   pckge.Sender,
+		Protocol: readed_inner.Protocol,
+		Version:  readed_inner.Version,
+		Data:     readed_inner.Data,
+	}
+
+	// Das Paket wird für Lokale Weiterverabeitung weitergereicht
+	if err := obj.EnterLocallyPackage(internal_package); err != nil {
+		return fmt.Errorf("DecryptLocallyPackageToBuffer: " + err.Error())
+	}
+
+	// Das Paket wurde erfolgreich Lokal ausgewertet
+	return nil
 }
 
 // Entschlüsselt ein Lokales Paket und Speichert es im Puffer
-func (obj *Kernel) DecryptLocallyPackageToBuffer(pckge *addresspackages.FinalAddressLayerPackage) error {
+func (obj *Kernel) DecryptedLocallyPackageToBuffer(pckge *addresspackages.SendableAddressLayerPackage) error {
 	// Es wird geprüft ob das Paket für diesen Node bestimmt ist
-	fmt.Println("LOCAL_PACKAGE_RECIVED")
+	if !bytes.Equal(pckge.Reciver.SerializeCompressed(), obj.GetPublicKey().SerializeCompressed()) {
+		return fmt.Errorf("DecryptLocallyPackageToBuffer: unkown reciver address, is not locally address")
+	}
+
+	// Die Daten werden versucht zu entschlüsseöm
+	dcrypted, err := utils.DecryptDataWithPrivateKey(obj._private_key, pckge.Data)
+	if err != nil {
+		return fmt.Errorf("DecryptLocallyPackageToBuffer: " + err.Error())
+	}
+
+	// Die Daten werden eingelesen
+	readed_inner, err := addresspackages.ReadInnerFrameFromBytes(dcrypted)
+	if err != nil {
+		return fmt.Errorf("DecryptLocallyPackageToBuffer: " + err.Error())
+	}
+
+	// Das Paket zur Internen Verarbeitung wird erstellt
+	internal_package := &addresspackages.AddressLayerPackage{
+		Reciver:  pckge.Reciver,
+		Sender:   pckge.Sender,
+		Protocol: readed_inner.Protocol,
+		Version:  readed_inner.Version,
+		Data:     readed_inner.Data,
+	}
+
+	// Das Paket wird für Lokale Weiterverabeitung weitergereicht
+	if err := obj.EnterLocallyPackage(internal_package); err != nil {
+		return fmt.Errorf("DecryptLocallyPackageToBuffer: " + err.Error())
+	}
+
+	// Das Paket wurde erfolgreich Lokal ausgewertet
 	return nil
 }
 
 // Nimmt eintreffende Layer 2 Pakete entgegen
-func (obj *Kernel) EnterL2Package(pckge *addresspackages.FinalAddressLayerPackage, conn RelayConnection) error {
+func (obj *Kernel) EnterL2Package(pckge *addresspackages.SendableAddressLayerPackage, conn RelayConnection) error {
 	// Es wird geprüft ob der Kernel noch ausgeführt wird
 	if !obj.IsRunning() {
 		return fmt.Errorf("EnterL2Package: kernel is not running")
@@ -148,9 +218,16 @@ func (obj *Kernel) EnterL2Package(pckge *addresspackages.FinalAddressLayerPackag
 
 	// Es wird geprüft ob es sich um eine Lokale Adresse handelt, wenn ja wird sie Lokal weiterverabeitet
 	if obj.IsLocallyAddress(pckge.Reciver) {
-		// Das Paket wird Entschlüsselt und dann an den Lokalen Buffer übergeben
-		if err := obj.DecryptLocallyPackageToBuffer(pckge); err != nil {
-			return fmt.Errorf("EnterL2Package: 1: " + err.Error())
+		// Wenn es sich um ein Verschlüsseltes Paket handelt, wird versuch dieses zu Entschlüsseln,
+		// bei einem Unverschlüsseltes Paket wird es direkt Verarbeitet
+		if !pckge.Plain {
+			if err := obj.DecryptedLocallyPackageToBuffer(pckge); err != nil {
+				return fmt.Errorf("EnterL2Package: 1: " + err.Error())
+			}
+		} else {
+			if err := obj.PlainLocallyPackageToBuffer(pckge); err != nil {
+				return fmt.Errorf("EnterL2Package: 1: " + err.Error())
+			}
 		}
 
 		// Der Vorgang wurde ohne Fehler durchgeführt
@@ -164,7 +241,6 @@ func (obj *Kernel) EnterL2Package(pckge *addresspackages.FinalAddressLayerPackag
 
 	// Es wird geprüft ob es sich um Nicht verschlüsseltes PCI Paket handelt
 	if pckge.Plain && pckge.PCI {
-		// Das Paket wird Lokal weiterverabeitet
 		obj.EnterPlainPCIPackage(pckge, conn)
 	}
 
@@ -184,7 +260,7 @@ func (obj *Kernel) EnterL2Package(pckge *addresspackages.FinalAddressLayerPackag
 }
 
 // Wird verwendet um Pakete an das Netzwerk zu senden
-func (obj *Kernel) WriteL2PackageByNetworkRoute(pckge *addresspackages.FinalAddressLayerPackage) (*extra.PackageSendState, error) {
+func (obj *Kernel) WriteL2PackageByNetworkRoute(pckge *addresspackages.SendableAddressLayerPackage) (*extra.PackageSendState, error) {
 	// Das Paket wird an den Routing Manager übergeben
 	sstate, err := obj._connection_manager.EnterPackageToRoutingManger(pckge)
 	if err != nil {
@@ -196,11 +272,11 @@ func (obj *Kernel) WriteL2PackageByNetworkRoute(pckge *addresspackages.FinalAddr
 }
 
 // Verschlüsselt ein nicht Verschlüsseltes Layer 2 Paket, Signiert es und Sendet es ins Netzwerk
-func (obj *Kernel) EncryptPlainL2PackageAndWriteByNetworkRoute(pckge *addresspackages.PreAddressLayerPackage) (*extra.PackageSendState, error) {
+func (obj *Kernel) EncryptPlainL2PackageAndWriteByNetworkRoute(pckge *addresspackages.AddressLayerPackage) (*extra.PackageSendState, error) {
 	// Die Inneren Verschlüsselten Daten werden übertragen
-	internal_data := addresspackages.EncryptedInnerData{
+	internal_data := addresspackages.InnerFrame{
 		Protocol: pckge.Protocol,
-		Body:     pckge.Body,
+		Data:     pckge.Data,
 		Version:  pckge.Version,
 	}
 
@@ -231,7 +307,7 @@ func (obj *Kernel) EncryptPlainL2PackageAndWriteByNetworkRoute(pckge *addresspac
 	}
 
 	// Das Verschlüsselte Paket wird erstellt
-	builded_encrypted_package := addresspackages.FinalAddressLayerPackage{
+	builded_encrypted_package := addresspackages.SendableAddressLayerPackage{
 		Sender:  pckge.Sender,
 		Reciver: pckge.Reciver,
 		Data:    encrypted_data,
@@ -251,11 +327,11 @@ func (obj *Kernel) EncryptPlainL2PackageAndWriteByNetworkRoute(pckge *addresspac
 }
 
 // Signiert ein Layer 2 Paket und sendet es unverschlüsselt an das Netzwerk
-func (obj *Kernel) PlainL2PackageAndWriteByNetworkRoute(pckge *addresspackages.PreAddressLayerPackage, please_check_instructions bool) (*extra.PackageSendState, error) {
+func (obj *Kernel) PlainL2PackageAndWriteByNetworkRoute(pckge *addresspackages.AddressLayerPackage, please_check_instructions bool) (*extra.PackageSendState, error) {
 	// Die Inneren Verschlüsselten Daten werden übertragen
-	internal_data := addresspackages.PlainInnerData{
+	internal_data := addresspackages.InnerFrame{
 		Protocol: pckge.Protocol,
-		Body:     pckge.Body,
+		Data:     pckge.Data,
 		Version:  pckge.Version,
 	}
 
@@ -280,7 +356,7 @@ func (obj *Kernel) PlainL2PackageAndWriteByNetworkRoute(pckge *addresspackages.P
 	}
 
 	// Das Verschlüsselte Paket wird erstellt
-	builded_encrypted_package := addresspackages.FinalAddressLayerPackage{
+	builded_encrypted_package := addresspackages.SendableAddressLayerPackage{
 		Sender:  pckge.Sender,
 		Reciver: pckge.Reciver,
 		Data:    byted_inner_data,
@@ -302,11 +378,11 @@ func (obj *Kernel) PlainL2PackageAndWriteByNetworkRoute(pckge *addresspackages.P
 // Nimmt einen Datensatz von einem Protokoll entgegen verschlüsselt ihn und überträgt es als Layer 2 Paket (verschlüsselt)
 func (obj *Kernel) EnterBytesEncryptAndSendL2PackageToNetwork(protocol_type uint8, package_bytes []byte, reciver_pkey *btcec.PublicKey) (*extra.PackageSendState, error) {
 	// Das Paket wird gebaut
-	builded_locally_package := addresspackages.PreAddressLayerPackage{
+	builded_locally_package := addresspackages.AddressLayerPackage{
 		Reciver:  *reciver_pkey,
 		Sender:   *obj.GetPublicKey(),
 		Protocol: protocol_type,
-		Body:     package_bytes,
+		Data:     package_bytes,
 	}
 
 	// Es wird ermittelt ob es sich um eien Lokale Adresse handelt
@@ -337,11 +413,11 @@ func (obj *Kernel) EnterBytesEncryptAndSendL2PackageToNetwork(protocol_type uint
 // Nimmt einen Datensatz von einem Protokoll entgegen und überträgt es als Layer 2 Paket (unverschlüsselt)
 func (obj *Kernel) EnterBytesAndSendL2PackageToNetwork(protocol_type uint8, package_bytes []byte, reciver_pkey *btcec.PublicKey, please_check_instructions bool) (*extra.PackageSendState, error) {
 	// Das Paket wird gebaut
-	builded_locally_package := addresspackages.PreAddressLayerPackage{
+	builded_locally_package := addresspackages.AddressLayerPackage{
 		Reciver:  *reciver_pkey,
 		Sender:   *obj.GetPublicKey(),
 		Protocol: protocol_type,
-		Body:     package_bytes,
+		Data:     package_bytes,
 	}
 
 	// Es wird ermittelt ob es sich um eien Lokale Adresse handelt

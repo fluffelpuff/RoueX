@@ -8,7 +8,7 @@ import (
 )
 
 // Stellt ein Verschlüsseltes Paket dar
-type FinalAddressLayerPackage struct {
+type SendableAddressLayerPackage struct {
 	Reciver btcec.PublicKey // Sender public key
 	Sender  btcec.PublicKey // Reciver public key
 	Plain   bool            // Plain or encrypted
@@ -28,12 +28,12 @@ type byted_final_adrl_package struct {
 }
 
 // Prüft ob die Signatur eines Address Layer Paketes korrekt ist
-func (obi *FinalAddressLayerPackage) ValidateSignature() bool {
+func (obi *SendableAddressLayerPackage) ValidateSignature() bool {
 	return true
 }
 
 // Gibt das Paket als Bytes zurück
-func (obj *FinalAddressLayerPackage) ToBytes() ([]byte, error) {
+func (obj *SendableAddressLayerPackage) ToBytes() ([]byte, error) {
 	// Die Innerbytes werden vorbereitet
 	pre_inner_data := byted_final_adrl_package{
 		Reciver: obj.Reciver.SerializeCompressed(),
@@ -54,28 +54,28 @@ func (obj *FinalAddressLayerPackage) ToBytes() ([]byte, error) {
 	return b_data, nil
 }
 
-// Wird verwendet um ein PreAddressLayerPackage aus Bytes einzulesen
-func ReadFinalAddressLayerPackageFromBytes(dbyte []byte) (*FinalAddressLayerPackage, error) {
+// Wird verwendet um ein AddressLayerPackage aus Bytes einzulesen
+func ReadSendableAddressLayerPackageFromBytes(dbyte []byte) (*SendableAddressLayerPackage, error) {
 	// Es wird versucht das Paket einzulesen
 	var v byted_final_adrl_package
 	if err := cbor.Unmarshal(dbyte, &v); err != nil {
-		return nil, fmt.Errorf("ReadFinalAddressLayerPackageFromBytes: 1: " + err.Error())
+		return nil, fmt.Errorf("ReadSendableAddressLayerPackageFromBytes: 1: " + err.Error())
 	}
 
 	// Der Öffentliche Schlüssel des Senders wird eingelesen
 	sender_pkey, err := btcec.ParsePubKey(v.Sender)
 	if err != nil {
-		return nil, fmt.Errorf("ReadFinalAddressLayerPackageFromBytes: 2: " + err.Error())
+		return nil, fmt.Errorf("ReadSendableAddressLayerPackageFromBytes: 2: " + err.Error())
 	}
 
 	// Der Öffentliche Schlüssel des Empfängers wird
 	reciver_pkey, err := btcec.ParsePubKey(v.Reciver)
 	if err != nil {
-		return nil, fmt.Errorf("ReadFinalAddressLayerPackageFromBytes: 3: " + err.Error())
+		return nil, fmt.Errorf("ReadSendableAddressLayerPackageFromBytes: 3: " + err.Error())
 	}
 
 	// Das Paket wird nachgebaut
-	rebuilded := &FinalAddressLayerPackage{
+	rebuilded := &SendableAddressLayerPackage{
 		Reciver: *reciver_pkey,
 		Sender:  *sender_pkey,
 		Data:    v.Data,

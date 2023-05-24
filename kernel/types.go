@@ -62,7 +62,7 @@ type ExternalModule interface {
 
 // Gibt die Registrierte Paketfunktion an
 type KernelTypeProtocol interface {
-	EnterRecivedPackage(*addresspackages.PreAddressLayerPackage) error
+	EnterRecivedPackage(*addresspackages.AddressLayerPackage) error
 	EnterCommandData(string, [][]byte, *APIProcessConnectionWrapper) (map[string]interface{}, error)
 	RegisterKernel(kernel *Kernel) error
 	GetProtocolName() string

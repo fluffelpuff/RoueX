@@ -320,7 +320,7 @@ func (obj *RelayConnectionEntry) RegisterRouteList(rlist *RelayRoutesList) bool 
 }
 
 // Nimmt Pakete entgegen welche gesendet werden sollen
-func (obj *RelayConnectionEntry) BufferL2PackageAndWrite(pckg *addresspackages.FinalAddressLayerPackage) (*extra.PackageSendState, error) {
+func (obj *RelayConnectionEntry) BufferL2PackageAndWrite(pckg *addresspackages.SendableAddressLayerPackage) (*extra.PackageSendState, error) {
 	// Es wird geprüft ob eine Aktive Verbindung verfügbar ist
 	if !obj.HasActiveConnection() {
 		return nil, rerror.NewIOStateError("has no active connection")

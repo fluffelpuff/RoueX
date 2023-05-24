@@ -47,7 +47,7 @@ func readEncryptedTransportPackageFromBytes(d_bytes []byte) (*EncryptedTransport
 // Websocket Transportpaket
 type WSTransportPaket struct {
 	Signature []byte `cbor:"1,keyasint"`
-	Body      []byte `cbor:"2,keyasint"`
+	Data      []byte `cbor:"2,keyasint"`
 }
 
 func (obj *WSTransportPaket) toBytes() ([]byte, error) {

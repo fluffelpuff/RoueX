@@ -370,10 +370,10 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _enter_incomming_pong_package(ppp PingPongP
 }
 
 // Nimmt eingetroffene Pakete aus dem Netzwerk Entgegen
-func (obj *ROUEX_PING_PONG_PROTOCOL) EnterRecivedPackage(pckage *addresspackages.PreAddressLayerPackage) error {
+func (obj *ROUEX_PING_PONG_PROTOCOL) EnterRecivedPackage(pckage *addresspackages.AddressLayerPackage) error {
 	// Es wird versucht das Paket einzulesen
 	var ppp PingPongPackage
-	if err := cbor.Unmarshal(pckage.Body, &ppp); err != nil {
+	if err := cbor.Unmarshal(pckage.Data, &ppp); err != nil {
 		return fmt.Errorf("error: invalid_package: " + err.Error())
 	}
 

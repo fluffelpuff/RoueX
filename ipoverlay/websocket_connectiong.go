@@ -174,7 +174,7 @@ func (obj *WebsocketKernelConnection) _enter_incomming_data_package(data []byte)
 	}
 
 	// Es wird versucht das Package Frame einzulesen
-	readed_package, err := addresspackages.ReadFinalAddressLayerPackageFromBytes(data)
+	readed_package, err := addresspackages.ReadSendableAddressLayerPackageFromBytes(data)
 	if err != nil {
 		log.Println("WebsocketKernelConnection: error by reading, package droped. error = "+err.Error(), "connection = "+obj._object_id)
 		return
@@ -516,7 +516,7 @@ func (obj *WebsocketKernelConnection) _start_thread_reader() error {
 			}
 
 			// Die Signatur wird geprüft
-			is_verify, err := utils.VerifyByBytes(obj._dest_relay_public_key, readed_ws_transport_paket.Signature, readed_ws_transport_paket.Body)
+			is_verify, err := utils.VerifyByBytes(obj._dest_relay_public_key, readed_ws_transport_paket.Signature, readed_ws_transport_paket.Data)
 			if err != nil {
 				func_muutx.Lock()
 				has_closed_reader_loop = err
@@ -531,7 +531,7 @@ func (obj *WebsocketKernelConnection) _start_thread_reader() error {
 			}
 
 			// Das Transportpaket wird entschlüsselt
-			decrypted_transport_package, err := obj._kernel.DecryptWithPrivateRelayKey(readed_ws_transport_paket.Body)
+			decrypted_transport_package, err := obj._kernel.DecryptWithPrivateRelayKey(readed_ws_transport_paket.Data)
 			if err != nil {
 				func_muutx.Lock()
 				has_closed_reader_loop = err
@@ -667,7 +667,7 @@ func (obj *WebsocketKernelConnection) _write_ws_package(data []byte, tpe Transpo
 	}
 
 	// Das Zwischenpaket wird erstellt
-	twerp := WSTransportPaket{Body: encrypted_transport_package, Signature: sig}
+	twerp := WSTransportPaket{Data: encrypted_transport_package, Signature: sig}
 
 	// Das Zwischenpaket wird in Bytes umgewandelt
 	byted_twerp, err := twerp.toBytes()
