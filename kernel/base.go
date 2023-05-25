@@ -9,6 +9,8 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/fluffelpuff/RoueX/firewall"
+	routingmanager "github.com/fluffelpuff/RoueX/routing_manager"
 	"github.com/fluffelpuff/RoueX/static"
 	"github.com/fluffelpuff/RoueX/utils"
 )
@@ -21,14 +23,15 @@ type Kernel struct {
 	_kernel_id             string
 	_is_running            bool
 	_lock                  *sync.Mutex
-	_routing_table         *RoutingManager
+	_routing_table         *routingmanager.RoutingManager
 	_trusted_relays        *TrustedRelays
 	_server_modules        []ServerModule
 	_client_modules        []ClientModule
 	_connection_manager    RelayConnectionRoutingTable
-	_firewall              *Firewall
+	_firewall              FirewallBaseStructure
 	_private_key           *btcec.PrivateKey
 	_api_interfaces        []*KernelAPI
+	_directory_services    []RelayDirectoryService
 	_temp_key_pairs        map[string]*btcec.PrivateKey
 	_temp_ecdh_keys        map[string][]byte
 	_protocols             map[int]*KernelPackageProtocolEntry
@@ -94,14 +97,14 @@ func CreateUnixKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 	}
 
 	// Es wird versucht die Routing Tabelle zu laden
-	routing_table_obj, err := loadRoutingManager(static.GetFilePathFor(static.ROUTING_TABLE))
+	routing_table_obj, err := routingmanager.LoadRoutingManager(static.GetFilePathFor(static.ROUTING_TABLE))
 	if err != nil {
 		log.Fatal("listen error:", err)
 		return nil, err
 	}
 
 	// Es wird versucht die Firewall Tabelle zu ladne
-	firewall_table_obj, err := loadFirewallTable(static.GetFilePathFor(static.FIREWALL_TABLE))
+	firewall_table_obj, err := firewall.LoadFirewallTable(static.GetFilePathFor(static.FIREWALL_TABLE))
 	if err != nil {
 		log.Fatal("listen error:", err)
 		return nil, err
@@ -136,6 +139,7 @@ func CreateUnixKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 		_temp_key_pairs:        make(map[string]*secp256k1.PrivateKey),
 		_socket_path:           static.GetFilePathFor(static.API_SOCKET),
 		_protocols:             make(map[int]*KernelPackageProtocolEntry),
+		_directory_services:    make([]RelayDirectoryService, 0),
 		_shutdown_complete:     false,
 	}
 

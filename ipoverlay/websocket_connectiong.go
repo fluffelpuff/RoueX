@@ -754,7 +754,7 @@ func (obj *WebsocketKernelConnection) CloseByKernel() {
 	}
 
 	// Log
-	log.Println("WebsocketKernelConnection: close connection by kernel. connection =", obj._object_id)
+	log.Println("WebsocketKernelConnection: closing connection by kernel. connection =", obj._object_id)
 
 	// Es wird Signalisiert dass es sich um einen Schließvorgnag handelt
 	obj._signal_shutdown = true
@@ -769,6 +769,9 @@ func (obj *WebsocketKernelConnection) CloseByKernel() {
 	for !obj._check_is_full_closed() {
 		time.Sleep(1 * time.Millisecond)
 	}
+
+	// Log
+	log.Println("WebsocketKernelConnection: connection closed by kernel. connection =", obj._object_id)
 }
 
 // Gibt die Aktuelle Ping Zeit zurück

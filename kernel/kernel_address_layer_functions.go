@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
@@ -255,9 +254,6 @@ func (obj *Kernel) WriteL2PackageByNetworkRoute(pckge *addresspackages.SendableA
 
 // Verschlüsselt ein nicht Verschlüsseltes Layer 2 Paket, Signiert es und Sendet es ins Netzwerk
 func (obj *Kernel) EncryptPlainL2PackageAndWriteByNetworkRoute(pckge *addresspackages.AddressLayerPackage) (*extra.PackageSendState, error) {
-	// Ermittelt die Aktuelle Zeit
-	c_ti := utils.TimeToMS(time.Now())
-
 	// Die Inneren Verschlüsselten Daten werden übertragen
 	internal_data := addresspackages.InnerFrame{
 		Protocol: pckge.Protocol,
@@ -306,8 +302,6 @@ func (obj *Kernel) EncryptPlainL2PackageAndWriteByNetworkRoute(pckge *addresspac
 	if err != nil {
 		return nil, fmt.Errorf("EncryptPlainL2PackageAndWriteByNetworkRoute: 4: " + err.Error())
 	}
-
-	fmt.Println(utils.TimeToMS(time.Now()) - c_ti)
 
 	// Der Vorgang wurde ohne Fehler durchgeführt
 	return sstate, nil

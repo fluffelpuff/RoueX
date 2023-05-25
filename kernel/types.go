@@ -68,6 +68,15 @@ type KernelTypeProtocol interface {
 	GetObjectId() string
 }
 
+// Stellt die Basisfunktionen einer Firewall dar
+type FirewallBaseStructure interface {
+}
+
+// Stellt ein Relay Diretory Service bereit
+type RelayDirectoryService interface {
+	// Future
+}
+
 // Stellt die MetaDaten einer einzelnen Verbindung dar
 type RelayConnectionMetaData struct {
 	SessionPKey     string

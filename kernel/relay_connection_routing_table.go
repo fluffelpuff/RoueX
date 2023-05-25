@@ -9,6 +9,7 @@ import (
 
 	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
 	"github.com/fluffelpuff/RoueX/kernel/extra"
+	routingmanager "github.com/fluffelpuff/RoueX/routing_manager"
 )
 
 // Stellt den Verbindungsmanager dar
@@ -246,7 +247,7 @@ func (obj *RelayConnectionRoutingTable) GetRelayByConnection(conn RelayConnectio
 }
 
 // Wird verwendet um alle Aktiven Routen für ein Relay zu Initalisieren
-func (obj *RelayConnectionRoutingTable) InitRoutesForRelay(rlay *Relay, routes *RelayRoutesList) (bool, bool) {
+func (obj *RelayConnectionRoutingTable) InitRoutesForRelay(rlay *Relay, routes *routingmanager.RelayRoutesList) (bool, bool) {
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
 	defer obj._lock.Unlock()

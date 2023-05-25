@@ -4,20 +4,33 @@ import (
 	"github.com/fxamacker/cbor"
 )
 
-type EncryptedClientHelloPackage struct {
-	PublicServerKey   []byte `cbor:"1,keyasint"`
-	PublicClientKey   []byte `cbor:"2,keyasint"`
-	ClientSig         []byte `cbor:"3,keyasint"`
-	RandClientPKey    []byte `cbor:"4,keyasint"`
-	RandClientPKeySig []byte `cbor:"5,keyasint"`
+// Clientseite P2P Daten
+type ClientSideP2PServerSocketData struct {
+	ClientP2PServerProtocol ClientServerP2PProtocol `cbor:"17,keyasint"`
+	ClientP2PEndPoint       [1024]byte              `cbor:"18,keyasint"`
+	ClientP2PEndPintSize    uint16                  `cbor:"19,keyasint"`
 }
 
+// Sitzungsinitialisierung
+type EncryptedClientHelloPackage struct {
+	ClientSideServerData *ClientSideP2PServerSocketData `cbor:"5,keyasint"`
+	RandClientPKeySig    []byte                         `cbor:"6,keyasint"`
+	HasClientSideP2P     []bool                         `cbor:"7,keyasint"`
+	PublicServerKey      []byte                         `cbor:"8,keyasint"`
+	PublicClientKey      []byte                         `cbor:"9,keyasint"`
+	RandClientPKey       []byte                         `cbor:"10,keyasint"`
+	ClientSig            []byte                         `cbor:"11,keyasint"`
+	Flags                [256]ProtocolFlag              `cbor:"11,keyasint"`
+}
+
+// Antwortpaket vom Server
 type EncryptedServerHelloPackage struct {
-	PublicServerKey   []byte `cbor:"7,keyasint"`
-	PublicClientKey   []byte `cbor:"8,keyasint"`
-	ServerSig         []byte `cbor:"9,keyasint"`
-	RandServerPKey    []byte `cbor:"10,keyasint"`
-	RandServerPKeySig []byte `cbor:"11,keyasint"`
+	PublicServerKey   []byte `cbor:"12,keyasint"`
+	PublicClientKey   []byte `cbor:"13,keyasint"`
+	ServerSig         []byte `cbor:"14,keyasint"`
+	RandServerPKey    []byte `cbor:"15,keyasint"`
+	RandServerPKeySig []byte `cbor:"16,keyasint"`
+	TryToP2PConnect   bool   `cbor:"17,keyasint"`
 }
 
 // Verschlüssltes Transportpaket
@@ -56,10 +69,6 @@ func (obj *WSTransportPaket) toBytes() ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
-}
-
-func (obj *WSTransportPaket) PreValidate() bool {
-	return false
 }
 
 func readWSTransportPaketFromBytes(d_bytes []byte) (*WSTransportPaket, error) {

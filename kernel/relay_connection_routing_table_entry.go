@@ -10,12 +10,13 @@ import (
 	addresspackages "github.com/fluffelpuff/RoueX/address_packages"
 	"github.com/fluffelpuff/RoueX/kernel/extra"
 	"github.com/fluffelpuff/RoueX/rerror"
+	routingmanager "github.com/fluffelpuff/RoueX/routing_manager"
 )
 
 // Stellt einen Relay Eintrag dar
 type RelayConnectionEntry struct {
 	_lock            *sync.Mutex
-	_route_list      *RelayRoutesList
+	_route_list      *routingmanager.RelayRoutesList
 	_signal_shutdown bool
 	_closed          bool
 	PingTime         []uint64
@@ -302,7 +303,7 @@ func (obj *RelayConnectionEntry) HasActiveRouteList() bool {
 }
 
 // registriert eine Routing Liste für diesen Relay
-func (obj *RelayConnectionEntry) RegisterRouteList(rlist *RelayRoutesList) bool {
+func (obj *RelayConnectionEntry) RegisterRouteList(rlist *routingmanager.RelayRoutesList) bool {
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
 	defer obj._lock.Unlock()

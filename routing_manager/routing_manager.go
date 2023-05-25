@@ -1,4 +1,4 @@
-package kernel
+package routingmanager
 
 import (
 	"database/sql"
@@ -8,6 +8,9 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 )
+
+type RelayInterface interface {
+}
 
 // Stellt einen Routing Eintrag dar
 type RoutingManagerEntry struct {
@@ -49,12 +52,12 @@ func (obj *RoutingManager) Shutdown() {
 }
 
 // Gibt die Routen für einen Spiziellen Relay aus
-func (obj *RoutingManager) FetchRoutesByRelay(relay *Relay) (*RelayRoutesList, error) {
+func (obj *RoutingManager) FetchRoutesByRelay(relay RelayInterface) (*RelayRoutesList, error) {
 	return &RelayRoutesList{}, nil
 }
 
 // Wird verwendet um den Routing Manager zu laden
-func loadRoutingManager(path string) (RoutingManager, error) {
+func LoadRoutingManager(path string) (RoutingManager, error) {
 	// Es wird versucht die SQLite Datei zu laden
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
