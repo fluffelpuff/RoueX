@@ -48,7 +48,6 @@ type RelayConnection interface {
 	GetProtocol() string
 	GetObjectId() string
 	FinallyInit() error
-	Write([]byte) error
 	IsConnected() bool
 	IsFinally() bool
 	CloseByKernel()

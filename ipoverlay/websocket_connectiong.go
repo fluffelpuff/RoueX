@@ -21,6 +21,7 @@ type writer_buffer_entry struct {
 	data   []byte
 	sstate *extra.PackageSendState
 	size   uint64
+	tpe    TransportPackageType
 }
 
 // Stellt eine Websocket Verbindung dar
@@ -207,11 +208,18 @@ func (obj *WebsocketKernelConnection) _send_ping_and_wait_of_pong() (uint64, err
 		panic(err)
 	}
 
-	// Das Paket wird gesendet
+	// Log
 	log.Println("WebsocketKernelConnection: send ping package. connection =", obj._object_id, "process_id =", hex.EncodeToString(new_ping_session.ProcessId))
-	if err := obj._write_ws_package(package_bytes, Ping); err != nil {
+	/*if err := obj._write_ws_package(package_bytes, Ping); err != nil {
 		return 0, err
 	}
+	*/
+
+	// Das Rückgabe Objekt wird gebaut
+	revobj := extra.NewPackageSendState()
+
+	// Der Eintrag wird in dem Buffer zwischengespeichert
+	obj._write_buffer <- &writer_buffer_entry{data: package_bytes, sstate: revobj, size: uint64(len(package_bytes)), tpe: Ping}
 
 	// Es wird auf die Antwort des Paketes gewartet
 	r_time, err := new_ping_session.untilWaitOfPong()
@@ -316,11 +324,11 @@ func (obj *WebsocketKernelConnection) __send_pong(ping_id []byte) error {
 		return fmt.Errorf("WebsocketKernelConnection.__send_pong: no connection")
 	}
 
-	// Das Paket wird versendet
-	send_err := obj._write_ws_package(pong_package_bytes, Pong)
-	if err != nil {
-		return fmt.Errorf("__send_pong:" + send_err.Error())
-	}
+	// Das Rückgabe Objekt wird gebaut
+	revobj := extra.NewPackageSendState()
+
+	// Der Eintrag wird in dem Buffer zwischengespeichert
+	obj._write_buffer <- &writer_buffer_entry{data: pong_package_bytes, sstate: revobj, size: uint64(len(pong_package_bytes)), tpe: Pong}
 
 	// Der Vorgang wurde ohne fehler durchgeführt
 	log.Println("WebsocketKernelConnection: pong package send. pingid =", hex.EncodeToString(ping_id))
@@ -558,7 +566,7 @@ func (obj *WebsocketKernelConnection) _start_thread_writer() error {
 			r_data := <-obj._write_buffer
 
 			// Die Daten werden gesendet
-			if err := obj.Write(r_data.data); err != nil {
+			if err := obj._write_ws_package(r_data.data, r_data.tpe); err != nil {
 				// Es wird Signalisiert dass die Daten nicht gesendet werden konnten
 				r_data.sstate.SetFinallyState(extra.DROPED)
 
@@ -629,20 +637,15 @@ func (obj *WebsocketKernelConnection) _write_ws_package(data []byte, tpe Transpo
 		return err
 	}
 
-	// Der Threadlock wird verwendet
-	obj._write_lock.Lock()
-
 	// Das fertige Paket wird übertragen, hierfür wird der IO-Lock verwendet
 	if err := obj._conn.WriteMessage(websocket.BinaryMessage, final_encrypted); err != nil {
-		obj._write_lock.Unlock()
-		return err
+		return fmt.Errorf("_write_ws_package: " + err.Error())
 	}
 
 	// Die gesendeten Bytes werden hinzugerechnet
+	obj._lock.Lock()
 	obj._tx_bytes += uint64(len(final_encrypted))
-
-	// Der Threadlock wird freigegeben
-	obj._write_lock.Unlock()
+	obj._lock.Unlock()
 
 	// Der Vorgang wurde ohne Fehler erfolgreich druchgeführt
 	log.Println("WebsocketKernelConnection: bytes writed. connection =", obj._object_id, "size =", len(final_encrypted))
@@ -726,11 +729,6 @@ func (obj *WebsocketKernelConnection) IsConnected() bool {
 	x := obj._disconnected
 	obj._lock.Unlock()
 	return r && t == 1 && !s && !x
-}
-
-// Schreibt Daten in die Verbindung
-func (obj *WebsocketKernelConnection) Write(data []byte) error {
-	return obj._write_ws_package(data, Data)
 }
 
 // Gibt die Aktuelle Objekt ID aus
@@ -836,7 +834,7 @@ func (obj *WebsocketKernelConnection) EnterSendableData(data []byte) (*extra.Pac
 	revobj := extra.NewPackageSendState()
 
 	// Der Eintrag wird in dem Buffer zwischengespeichert
-	obj._write_buffer <- &writer_buffer_entry{data: data, sstate: revobj, size: uint64(len(data))}
+	obj._write_buffer <- &writer_buffer_entry{data: data, sstate: revobj, size: uint64(len(data)), tpe: Data}
 
 	// Der Vorgang wurde ohne Fehler erfolreich fertigestellt
 	return revobj, nil
@@ -849,7 +847,7 @@ func (obj *WebsocketKernelConnection) CannUseToWrite() bool {
 	defer obj._lock.Unlock()
 
 	// Der Vorgang wurde ohne Fehler erfolreich fertigestellt
-	return !(len(obj._write_buffer) >= 2)
+	return !(len(obj._write_buffer) >= 128)
 }
 
 // Erstellt ein neues Kernel Sitzungs Objekt
@@ -864,7 +862,7 @@ func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id s
 		_otk_ecdh_key_id:       relay_otk_ecdh_key_id,
 		_ping:                  []uint64{ping_time},
 		_bandwith:              []float64{bandwith},
-		_write_buffer:          make(chan *writer_buffer_entry, 64),
+		_write_buffer:          make(chan *writer_buffer_entry, 128),
 		_io_type:               io_type,
 		_conn:                  conn,
 		_signal_shutdown:       false,

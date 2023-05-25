@@ -47,6 +47,16 @@ type rouex_entry struct {
 	_objid         string
 }
 
+// Setzt eine neue Sende Zeit
+func (obj *rouex_entry) snctime() {
+	// Der Threadlock wird verwendet
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
+	// Die Aktuelle Zeit wird gesetzt
+	obj._start_time = time.Now()
+}
+
 // Gibt an ob die Maxiamle Zeit erreicht wurde
 func (obj *rouex_entry) maxwnend() bool {
 	// Die Zeitwerte werden abgerufen
@@ -185,16 +195,19 @@ func (obj *rouex_entry) gtimems() uint64 {
 func (obj *rouex_entry) signal_response() {
 	// Der Threadlock wird verwendet
 	obj._lock.Lock()
-	defer obj._lock.Unlock()
 
 	// Es wird geprüft ob der Aktuelle Stauts gesetzt wurde
 	if obj._finally_time != nil {
+		obj._lock.Unlock()
 		return
 	}
 
 	// Die Aktuelle Zeit wird gesetzt
 	tr := time.Now()
 	obj._finally_time = &tr
+
+	// Der Threadlock wird freigegeben
+	obj._lock.Unlock()
 
 	// Dem Chan wird Signalisiert dass das Paket eingetroffen ist
 	select {
@@ -207,10 +220,12 @@ func (obj *rouex_entry) signal_response() {
 func (obj *rouex_entry) Close() {
 	// Der Threadlock wird verwendet
 	obj._lock.Lock()
-	defer obj._lock.Unlock()
 
 	// Es wird Signalisiert dass der Vorgang abgebrochen wurde
 	obj._aborted = true
+
+	// Der Threadlock wird freigegeben
+	obj._lock.Unlock()
 
 	// Dem Chan wird Signalisiert dass kein Paket eingetroffen ist
 	select {
@@ -295,12 +310,15 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _start_ping_pong_process(pkey *btcec.Public
 		panic(err)
 	}
 
+	// Start time
+	s_ti := time.Now()
+
 	// Es wird ein neuer Ping Prozess wird erzeugt
 	rx_entry := &rouex_entry{
 		_id:            proc_id,
 		_lock:          new(sync.Mutex),
 		_kernel:        obj._kernel,
-		_start_time:    time.Now(),
+		_start_time:    s_ti,
 		_max_wait_time: uint64(1200),
 		_objid:         utils.RandStringRunes(12),
 		_wait_chan:     make(chan bool),
@@ -325,17 +343,16 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _start_ping_pong_process(pkey *btcec.Public
 	// Das Rückgabeobjekt wird erstellt
 	reval := make(map[string]interface{})
 
-	// Es wird gewartet bis sich der Status des Paketes geändert hat
-	for range time.Tick(1 * time.Millisecond) {
-		if sstate.GetState() != extra.WAIT {
-			break
-		}
-		if !obj._kernel.IsRunning() {
-			break
-		}
-		if rx_entry.isaborted() {
-			break
-		}
+	// Es wird auf einen neuen Paketstatus gewartet
+	sstate.WaitOfNewState()
+
+	// Es wird geprüft ob das Paket übermittelt wurde
+	switch sstate.GetState() {
+	case extra.DROPED:
+		log.Printf("ROUEX_PING_PONG_PROTOCOL: ping process droped. pid = %s\n", proc_id)
+		obj._remove_ping_process(rx_entry, process_api_conn)
+		reval["state"] = uint8(extra.DROPED)
+		return reval, nil
 	}
 
 	// Es wird geprüft ob der Vorgang abgebrochen
@@ -346,8 +363,11 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _start_ping_pong_process(pkey *btcec.Public
 		return reval, nil
 	}
 
+	// Die Aktuelle Sendezeit wird gesetzt
+	rx_entry.snctime()
+
 	// Log
-	log.Printf("ROUEX_PING_PONG_PROTOCOL: ping package transmitted. pid = %s\n", proc_id)
+	log.Printf("ROUEX_PING_PONG_PROTOCOL: ping package transmitted. pid = %s, total = %d ms\n", proc_id, utils.TimeToMS(time.Now())-utils.TimeToMS(s_ti))
 
 	// Es wird auf die Antwort wird gewartet
 	state, err := rx_entry.waitfnc()
@@ -417,18 +437,22 @@ func (obj *ROUEX_PING_PONG_PROTOCOL) _enter_incomming_ping_package(ppp PingPongP
 func (obj *ROUEX_PING_PONG_PROTOCOL) _enter_incomming_pong_package(ppp PingPongPackage, source *btcec.PublicKey) error {
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
-	defer obj._lock.Unlock()
 
 	// Es wird geprüft ob es einen offnenen Vorgang gibt
 	pro, no_found := obj._open_processes[ppp.Id]
 	if !no_found {
+		obj._lock.Unlock()
 		return nil
 	}
 
 	// Es wird geprüft ob das Paket beretis beantwortet wurde
 	if pro.isfinn() {
+		obj._lock.Unlock()
 		return nil
 	}
+
+	// Der Threadlock wird freigegeben
+	obj._lock.Unlock()
 
 	// Es wird Signalisiert dass ein Pong empangen wurde
 	pro.signal_response()

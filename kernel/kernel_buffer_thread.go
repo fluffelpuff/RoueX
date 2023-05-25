@@ -45,9 +45,6 @@ func buffer_io_routine(kernel *Kernel) {
 		for kernel.IsRunning() {
 			// Das Paket wird abgerufen
 			pack := kernel._memory.GetNextPackage()
-			if pack == nil {
-				time.Sleep(100 * time.Microsecond)
-			}
 
 			// Das Paket wird an den Kernel übergeben
 			if err := kernel.EnterLocallyPackage(pack); err != nil {
@@ -63,8 +60,6 @@ func buffer_io_routine(kernel *Kernel) {
 	}
 
 	// Es werden 4 Writer Threads gestartet
-	go thr_func()
-	go thr_func()
 	go thr_func()
 
 	// Diese Schleife wird für 30MS ausgeführt
