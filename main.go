@@ -8,7 +8,7 @@ import (
 
 	"github.com/fluffelpuff/RoueX/ipoverlay"
 	"github.com/fluffelpuff/RoueX/kernel"
-	kernelprotocols "github.com/fluffelpuff/RoueX/kernel_adrl_protocols"
+	protocols "github.com/fluffelpuff/RoueX/kernel_adrl_protocols"
 	"github.com/fluffelpuff/RoueX/keystore"
 	"github.com/fluffelpuff/RoueX/static"
 )
@@ -38,7 +38,7 @@ func main() {
 	}
 
 	// Das Ping Pong Layer 2 Protkoll wird Registriert
-	layer_two_ping_pong := kernelprotocols.NEW_ROUEX_PING_PONG_PROTOCOL_HANDLER()
+	layer_two_ping_pong := protocols.NEW_ROUEX_PING_PONG_PROTOCOL_HANDLER()
 	if err := kernel_object.RegisterNewKernelTypeProtocol(0, layer_two_ping_pong); err != nil {
 		panic(err)
 	}

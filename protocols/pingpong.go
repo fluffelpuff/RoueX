@@ -1,4 +1,4 @@
-package kernelprotocols
+package protocols
 
 import (
 	"encoding/hex"
