@@ -8,6 +8,7 @@ import (
 
 // Stellt das Gerüst für ein Server Modul dar
 type ServerModule interface {
+	IsIpBasedServer() bool
 	RegisterKernel(kernel *Kernel) error
 	GetObjectId() string
 	GetProtocol() string
@@ -75,6 +76,12 @@ type FirewallBaseStructure interface {
 // Stellt ein Relay Diretory Service bereit
 type RelayDirectoryService interface {
 	// Future
+}
+
+// Stellt ein Möglichen P2P Server Port und Protokoll verfügbar
+type P2PKernelServerWithProtocol struct {
+	Protocol string
+	Port     uint64
 }
 
 // Stellt die MetaDaten einer einzelnen Verbindung dar

@@ -293,3 +293,23 @@ func (obj *Kernel) DumpsRoutesForRelayByConnection(conn RelayConnection) (bool, 
 	// Der Vorgang wurde erfolgreich durchgeführt
 	return true, true
 }
+
+// Gibt an ob es einen IP Basierenden Server gibt
+func (obj *Kernel) GetIPBasedServersForP2PConnection(res_ip string) []P2PKernelServerWithProtocol {
+	// Der Threadlock wird verwendet
+	obj._lock.Lock()
+	defer obj._lock.Unlock()
+
+	// Es werden alle Server Module herausgesucht
+	for i := range obj._server_modules {
+		csmodule := obj._server_modules[i]
+
+		// check if is a ip based server module
+		if csmodule.IsIpBasedServer() {
+
+		}
+	}
+
+	fmt.Println("AAA:           ", res_ip)
+	return nil
+}

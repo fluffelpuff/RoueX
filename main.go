@@ -8,8 +8,8 @@ import (
 
 	"github.com/fluffelpuff/RoueX/ipoverlay"
 	"github.com/fluffelpuff/RoueX/kernel"
-	protocols "github.com/fluffelpuff/RoueX/kernel_adrl_protocols"
 	"github.com/fluffelpuff/RoueX/keystore"
+	protocols "github.com/fluffelpuff/RoueX/protocols"
 	"github.com/fluffelpuff/RoueX/static"
 )
 

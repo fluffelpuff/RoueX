@@ -3,6 +3,7 @@
 package kernel
 
 import (
+	"log"
 	"time"
 )
 
@@ -120,6 +121,9 @@ func (obj *Kernel) Shutdown() {
 
 	// Es wird geprüft ob der Kernelausgeführt wird
 	if obj._is_running {
+		// Log
+		log.Printf("Kernel: closing server modules. id = %s\n", obj.GetKernelID())
+
 		// Die Internen Dienste werden beendet
 		var vat ServerModule
 		for _, item := range obj._server_modules {
@@ -135,6 +139,9 @@ func (obj *Kernel) Shutdown() {
 			vat.Shutdown()
 		}
 
+		// Log
+		log.Printf("Kernel: server modules closed. id = %s\n", obj.GetKernelID())
+
 		// Der Threadlock wird entsperrt
 		obj._lock.Unlock()
 
@@ -144,11 +151,17 @@ func (obj *Kernel) Shutdown() {
 		// Der Threadlock wird verwendet
 		obj._lock.Lock()
 
+		// Log
+		log.Printf("Kernel: closing api interfaces. id = %s\n", obj.GetKernelID())
+
 		// Die API Schnitstellen werden geschlossen
 		for i := range obj._api_interfaces {
 			// Das Interface wird beendet
 			obj._api_interfaces[i]._close_by_kernel()
 		}
+
+		// Log
+		log.Printf("Kernel: api interfaces closed. id = %s\n", obj.GetKernelID())
 
 		// Es wird Signalisiert dass der Kernel nicht mehr läuft
 		obj._is_running = false
@@ -160,14 +173,20 @@ func (obj *Kernel) Shutdown() {
 	// Der Threadlock wird entsperrt
 	obj._lock.Unlock()
 
-	// Sollte der Server ausgeführt werden wird gewartet ob alle Dienste ausgeführt wurden
+	// Sollte der Server ausgeführt werden wird gewartet ob alle Dienste beendet wurden
 	if server_was_runed {
+		// Log
+		log.Printf("Kernel: wait of closing. id = %s\n", obj.GetKernelID())
+
 		// Es wird gewartet bis alles geschlossen wurde
 		for range time.Tick(1 * time.Millisecond) {
 			if obj._is_base_closed() {
 				break
 			}
 		}
+
+		// Log
+		log.Printf("Kernel: finally closed. id = %s\n", obj.GetKernelID())
 
 		// Die Datenbanken werden geschlossen
 		obj._routing_table.Shutdown()

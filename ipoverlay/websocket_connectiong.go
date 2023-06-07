@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -602,7 +603,7 @@ func (obj *WebsocketKernelConnection) _start_thread_writer() error {
 // Wird verwendet um ein Paket Abzusenden
 func (obj *WebsocketKernelConnection) _write_ws_package(data []byte, tpe TransportPackageType) error {
 	// Das Transportpaket wird vorbereitet
-	transport_package := EncryptedTransportPackage{SourceRelay: obj._kernel.GetPublicKey().SerializeCompressed(), DestinationRelay: obj._dest_relay_public_key.SerializeCompressed(), Type: tpe, Data: data}
+	transport_package := EncryptedTransportPackage{Type: tpe, Data: data}
 
 	// Das Paket wird in Bytes umgewandelt
 	byted_transport_package, err := transport_package.toBytes()
@@ -854,7 +855,7 @@ func (obj *WebsocketKernelConnection) CannUseToWrite() bool {
 }
 
 // Erstellt ein neues Kernel Sitzungs Objekt
-func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id string, relay_public_key *btcec.PublicKey, relay_otk_public_key *btcec.PublicKey, relay_otk_ecdh_key_id string, bandwith float64, ping_time uint64, io_type kernel.ConnectionIoType) (*WebsocketKernelConnection, error) {
+func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id string, relay_public_key *btcec.PublicKey, relay_otk_public_key *btcec.PublicKey, relay_otk_ecdh_key_id string, bandwith float64, ping_time uint64, io_type kernel.ConnectionIoType, local_socket *net.TCPAddr, remote_socket *net.TCPAddr) (*WebsocketKernelConnection, error) {
 	// Das Objekt wird erstellt
 	wkcobj := &WebsocketKernelConnection{
 		_object_id:             utils.RandStringRunes(12),
@@ -872,6 +873,9 @@ func createFinallyKernelConnection(conn *websocket.Conn, local_otk_key_pair_id s
 		_total_writer_threads:  0,
 		_total_reader_threads:  0,
 	}
+
+	// Log
+	log.Println(fmt.Sprintf("WebsocketKernelConnection: new finally connection. form = %s -> to local %s @ %s", remote_socket.String(), local_socket.String(), hex.EncodeToString(relay_public_key.SerializeCompressed())))
 
 	// Das Objekt wird zurückgegben
 	return wkcobj, nil

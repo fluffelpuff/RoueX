@@ -12,6 +12,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/fluffelpuff/RoueX/kernel"
+	"github.com/fluffelpuff/RoueX/static"
 	"github.com/fluffelpuff/RoueX/utils"
 	"github.com/fxamacker/cbor"
 	"github.com/gorilla/websocket"
@@ -85,6 +86,8 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 	// Es wird versucht eine Websocket verbindung aufzubauen
 	var err error
 	var conn *websocket.Conn
+	var local_sock_adr *net.TCPAddr
+	var remote_sock_adr *net.TCPAddr
 	if proxy_config != nil {
 		// Set the HTTP proxy to use
 		proxyURL, err := url.Parse(proxy_config.Host)
@@ -111,8 +114,12 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 			return fmt.Errorf(err.Error())
 		}
 
+		// Die Lokale und die Remote Socket Adresse wird ermittelt
+		remote_sock_adr = conn.RemoteAddr().(*net.TCPAddr)
+		local_sock_adr = conn.LocalAddr().(*net.TCPAddr)
+
 		// Log
-		log.Printf("WebsocketKernelClient: the websocket base connection to %s has been established.\n", url_str)
+		log.Println(fmt.Sprintf("WebsocketKernelClient: the websocket base connection to %s :: %s -> %s has been established.\n", url_str, local_sock_adr.String(), remote_sock_adr.String()))
 	} else {
 		// Log
 		log.Printf("WebsocketKernelClient: trying to establish a websocket connection to %s -- %s\n", url_str, hex.EncodeToString(pub_key.SerializeCompressed()))
@@ -124,8 +131,12 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 			return fmt.Errorf(err.Error())
 		}
 
+		// Die Lokale und die Remote Socket Adresse wird ermittelt
+		remote_sock_adr = conn.RemoteAddr().(*net.TCPAddr)
+		local_sock_adr = conn.LocalAddr().(*net.TCPAddr)
+
 		// Log
-		log.Printf("WebsocketKernelClient: the websocket base connection to %s has been established.\n", url_str)
+		log.Printf("WebsocketKernelClient: the websocket base connection to %s :: %s -> %s has been established.\n", url_str, local_sock_adr.IP.String(), remote_sock_adr.IP.String())
 	}
 
 	// Es wird ein Temporäres Schlüsselpaar erstellt
@@ -168,6 +179,9 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 		return fmt.Errorf("ConnectTo: 4: " + err.Error())
 	}
 
+	// Es wird ermittelt ob es einen P2P IP-basierenden Server Socket gibt
+	p2p_sockets := obj._kernel.GetIPBasedServersForP2PConnection(remote_sock_adr.IP.String())
+
 	// Die Aktuelle Zeit wird ermittelt
 	c_time := time.Now()
 
@@ -176,8 +190,32 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 		PublicServerKey:   pub_key.SerializeCompressed(),
 		PublicClientKey:   obj._kernel.GetPublicKey().SerializeCompressed(),
 		RandClientPKey:    temp_public_key.SerializeCompressed(),
-		ClientSig:         relay_signature,
 		RandClientPKeySig: temp_key_signature,
+		ClientSig:         relay_signature,
+		Version:           static.RoueXVersion{},
+		Flags:             []*WSPackageFlag{},
+	}
+
+	// Sollte ein P2P Socket vorhanden sein wird ein Flag eintrag dem Paket hinzugefügt
+	for i := range p2p_sockets {
+		// Der Port wird in Bytes umgewandelt
+		byted_port := utils.IntToBytes(int(p2p_sockets[i].Port))
+
+		// Der Flagwert wird erstellt
+		f_value := &WSPackageFlag{Value: byted_port}
+
+		// Es wird ermittelt ob es sich um ein bekanntes Package Flag handelt
+		switch p2p_sockets[i].Protocol {
+		case "ws_tcp":
+			f_value.Flag = [2]byte{0, 0}
+		case "ws_quic":
+			f_value.Flag = [2]byte{0, 1}
+		default:
+			continue
+		}
+
+		// Das Protokoll wird als Flag hinzugefügt
+		plain_client_hello_package.Flags = append(plain_client_hello_package.Flags, f_value)
 	}
 
 	// Das Paket wird in Bytes umgewandelt
@@ -264,7 +302,7 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 	bandwith_kbs := float64(float64(len(recived_message))/total_ts_time) / 1024
 
 	// Das Finale Sitzungsobjekt wird erstellt
-	finally_kernel_session, err := createFinallyKernelConnection(conn, key_pair_id, public_server_key, public_server_otk, otk_ecdh_key, bandwith_kbs, uint64(total_ts_time), kernel.OUTBOUND)
+	finally_kernel_session, err := createFinallyKernelConnection(conn, key_pair_id, public_server_key, public_server_otk, otk_ecdh_key, bandwith_kbs, uint64(total_ts_time), kernel.OUTBOUND, local_sock_adr, remote_sock_adr)
 	if err != nil {
 		obj._reset_proc()
 		conn.Close()

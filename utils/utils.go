@@ -19,3 +19,7 @@ func TimeToMS(now time.Time) uint64 {
 	millisecondsUint64 := uint64(milliseconds)
 	return millisecondsUint64
 }
+
+func IntToBytes(vint int) []byte {
+	return nil
+}

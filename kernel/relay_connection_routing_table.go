@@ -286,6 +286,9 @@ func (obj *RelayConnectionRoutingTable) InitRoutesForRelay(rlay *Relay, routes *
 
 // Wird vom Kernel verwendet alle Verbindungen zu schließen
 func (obj *RelayConnectionRoutingTable) ShutdownByKernel() {
+	// Log
+	log.Println("RelayConnectionRoutingTable: shutingdown.")
+
 	// Der Threadlock wird ausgeführt
 	obj._lock.Lock()
 
@@ -316,6 +319,9 @@ func (obj *RelayConnectionRoutingTable) ShutdownByKernel() {
 
 	// Es wird Signalisiert dass das Objekt gehschlossen werden soll
 	obj._is_closed = true
+
+	// Log
+	log.Println("RelayConnectionRoutingTable: shutdown complete.")
 }
 
 // Nimmt Pakete entgegen und Routet diese zu dem Entsprechenden Host

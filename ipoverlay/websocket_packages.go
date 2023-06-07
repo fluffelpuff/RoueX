@@ -1,44 +1,79 @@
 package ipoverlay
 
 import (
+	"github.com/fluffelpuff/RoueX/static"
 	"github.com/fxamacker/cbor"
 )
 
-// Clientseite P2P Daten
-type ClientSideP2PServerSocketData struct {
-	ClientP2PServerProtocol ClientServerP2PProtocol `cbor:"17,keyasint"`
-	ClientP2PEndPoint       [1024]byte              `cbor:"18,keyasint"`
-	ClientP2PEndPintSize    uint16                  `cbor:"19,keyasint"`
+// Flag Abbildung
+type WSPackageFlag struct {
+	// Gibt den Verwendeten Flag mit 1 Byte an
+	Flag [2]byte `cbor:"1,keyasint"`
+
+	// Gibt den Optionalen Flag wert an (maximal 96 bytes)
+	Value []byte `cbor:"2,keyasint"`
+}
+
+// Erstellt ein neues Flgag Objekt
+func NewWSPackageFlag(flag [2]byte, value []byte) (WSPackageFlag, error) {
+	return WSPackageFlag{Flag: flag, Value: value}, nil
 }
 
 // Sitzungsinitialisierung
 type EncryptedClientHelloPackage struct {
-	ClientSideServerData *ClientSideP2PServerSocketData `cbor:"5,keyasint"`
-	RandClientPKeySig    []byte                         `cbor:"6,keyasint"`
-	HasClientSideP2P     []bool                         `cbor:"7,keyasint"`
-	PublicServerKey      []byte                         `cbor:"8,keyasint"`
-	PublicClientKey      []byte                         `cbor:"9,keyasint"`
-	RandClientPKey       []byte                         `cbor:"10,keyasint"`
-	ClientSig            []byte                         `cbor:"11,keyasint"`
-	Flags                [256]ProtocolFlag              `cbor:"11,keyasint"`
+	// Der Öffentliche Server Schlüssel
+	PublicServerKey []byte `cbor:"3,keyasint"`
+
+	// Der Öffentliche Client Schlüsselt
+	PublicClientKey []byte `cbor:"4,keyasint"`
+
+	// Speichert die Signatur des Clients ab
+	ClientSig []byte `cbor:"5,keyasint"`
+
+	// Speichert den Öffentlichen Sitzungsschlüssel ab
+	RandClientPKey []byte `cbor:"6,keyasint"`
+
+	// Speichert die Signatur des Sitzungsschlüssel ab
+	RandClientPKeySig []byte `cbor:"7,keyasint"`
+
+	// Speichert die Aktuelle Version des Clients ab
+	Version static.RoueXVersion `cbor:"8,keyasint"`
+
+	// Speichert alle Verfügabren Flags ab
+	Flags []*WSPackageFlag `cbor:"9,keyasint"`
 }
 
 // Antwortpaket vom Server
 type EncryptedServerHelloPackage struct {
-	PublicServerKey   []byte `cbor:"12,keyasint"`
-	PublicClientKey   []byte `cbor:"13,keyasint"`
-	ServerSig         []byte `cbor:"14,keyasint"`
-	RandServerPKey    []byte `cbor:"15,keyasint"`
-	RandServerPKeySig []byte `cbor:"16,keyasint"`
-	TryToP2PConnect   bool   `cbor:"17,keyasint"`
+	// Speichert den Öffentlichen Schlüssel des Servers ab
+	PublicServerKey []byte `cbor:"10,keyasint"`
+
+	// Speichert den Öffentlichen Schlüssel des Clients ab
+	PublicClientKey []byte `cbor:"11,keyasint"`
+
+	// Speichert die Server Signatur ab
+	ServerSig []byte `cbor:"12,keyasint"`
+
+	// Speichert den Öffentlichen Schlüssel der Serverseitigen Sitzung
+	RandServerPKey []byte `cbor:"13,keyasint"`
+
+	// Speichert die SIgnatur zu dem Serverseitigen Sitzungsschlüssel
+	RandServerPKeySig []byte `cbor:"14,keyasint"`
+
+	// Speichert die Aktuelle Version des Clients ab
+	Version static.RoueXVersion `cbor:"15,keyasint"`
+
+	// Speichert alle Verfügabren Flags ab
+	Flags [16]*WSPackageFlag `cbor:"16,keyasint"`
 }
 
-// Verschlüssltes Transportpaket
+// Stellt das Verschlüsselte Datenpaket dar
 type EncryptedTransportPackage struct {
-	SourceRelay      []byte               `cbor:"1,keyasint"`
-	DestinationRelay []byte               `cbor:"2,keyasint"`
-	Type             TransportPackageType `cbor:"3,keyasint"`
-	Data             []byte               `cbor:"4,keyasint"`
+	// Gibt den Pakettypen an
+	Type TransportPackageType `cbor:"17,keyasint"`
+
+	// Gibt die Daten des Paketes an
+	Data []byte `cbor:"18,keyasint"`
 }
 
 func (obj *EncryptedTransportPackage) toBytes() ([]byte, error) {
@@ -59,8 +94,11 @@ func readEncryptedTransportPackageFromBytes(d_bytes []byte) (*EncryptedTransport
 
 // Websocket Transportpaket
 type WSTransportPaket struct {
-	Signature []byte `cbor:"1,keyasint"`
-	Data      []byte `cbor:"2,keyasint"`
+	// Stellt die Signatur eines Transportpaketes dar
+	Signature []byte `cbor:"21,keyasint"`
+
+	// Stellt die Daten dar
+	Data []byte `cbor:"22,keyasint"`
 }
 
 func (obj *WSTransportPaket) toBytes() ([]byte, error) {
@@ -81,7 +119,8 @@ func readWSTransportPaketFromBytes(d_bytes []byte) (*WSTransportPaket, error) {
 
 // Ping Paket
 type PingPackage struct {
-	PingId []byte `cbor:"1,keyasint"`
+	// Gibt die ID des aktuellen Ping vorganges an
+	PingId []byte `cbor:"23,keyasint"`
 }
 
 func (obj *PingPackage) toBytes() ([]byte, error) {
@@ -102,7 +141,8 @@ func readPingPackageFromBytes(d_bytes []byte) (*PingPackage, error) {
 
 // Pong Paket
 type PongPackage struct {
-	PingId []byte `cbor:"1,keyasint"`
+	// Gibt die ID des Pong vorganges an
+	PingId []byte `cbor:"24,keyasint"`
 }
 
 func (obj *PongPackage) toBytes() ([]byte, error) {

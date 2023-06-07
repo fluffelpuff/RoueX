@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -76,6 +77,9 @@ func (obj *WebsocketKernelServerEP) Shutdown() {
 	for obj._is_rn() {
 		time.Sleep(1 * time.Millisecond)
 	}
+
+	// Log
+	log.Println("WebsocketKernelServerEP: shutingdown complete. id =", obj._obj_id)
 }
 
 // Wird verwendet um den TCP basierten Server zu Starten
@@ -292,6 +296,13 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	// Die Aktuelle Zeit wird ermittelt
 	c_time := time.Now()
 
+	// Die Lokale und die Remote Socket Adresse wird ermittelt
+	remote_sock_adr := conn.RemoteAddr().(*net.TCPAddr)
+	local_sock_adr := conn.LocalAddr().(*net.TCPAddr)
+
+	// Log
+	log.Println(fmt.Sprintf("WebsocketKernelServerEP: new incomming connection accepted. form = %s -> to local %s", remote_sock_adr.String(), local_sock_adr.String()))
+
 	// Es wird auf das eintreffende Paket gewartet
 	mtype, message, err := conn.ReadMessage()
 	if err != nil {
@@ -451,7 +462,7 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	bandwith_kbs := float64(float64(len(message))/total_ts_time) / 1024
 
 	// Das Verbindungsobjekt wird erstellt
-	conn_obj, err := createFinallyKernelConnection(conn, key_pair_id, pub_client_key, pub_client_otk_key, otk_ecdh_key, bandwith_kbs, uint64(total_ts_time), kernel.OUTBOUND)
+	conn_obj, err := createFinallyKernelConnection(conn, key_pair_id, pub_client_key, pub_client_otk_key, otk_ecdh_key, bandwith_kbs, uint64(total_ts_time), kernel.OUTBOUND, local_sock_adr, remote_sock_adr)
 	if err != nil {
 		conn.Close()
 		log.Println("error: ", err.Error())
@@ -470,6 +481,11 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 		obj._kernel.RemoveConnection(conn_obj)
 		conn.Close()
 	}
+}
+
+// Gibt an ob es sich um einen IP basierenden Server handelt
+func (obj *WebsocketKernelServerEP) IsIpBasedServer() bool {
+	return true
 }
 
 // Erstellt einen neuen Lokalen Websocket Server
