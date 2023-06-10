@@ -1,0 +1,3 @@
+[submodule "bvkntp"]
+	path = bvkntp
+	url = https://github.com/beevik/ntp
