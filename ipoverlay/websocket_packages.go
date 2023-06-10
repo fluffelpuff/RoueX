@@ -8,14 +8,14 @@ import (
 // Flag Abbildung
 type WSPackageFlag struct {
 	// Gibt den Verwendeten Flag mit 1 Byte an
-	Flag [2]byte `cbor:"1,keyasint"`
+	Flag []byte `cbor:"1,keyasint"`
 
 	// Gibt den Optionalen Flag wert an (maximal 96 bytes)
 	Value []byte `cbor:"2,keyasint"`
 }
 
 // Erstellt ein neues Flgag Objekt
-func NewWSPackageFlag(flag [2]byte, value []byte) (WSPackageFlag, error) {
+func NewWSPackageFlag(flag []byte, value []byte) (WSPackageFlag, error) {
 	return WSPackageFlag{Flag: flag, Value: value}, nil
 }
 
@@ -40,7 +40,7 @@ type EncryptedClientHelloPackage struct {
 	Version static.RoueXVersion `cbor:"8,keyasint"`
 
 	// Speichert alle Verfügabren Flags ab
-	Flags []*WSPackageFlag `cbor:"9,keyasint"`
+	Flags []WSPackageFlag `cbor:"9,keyasint"`
 }
 
 // Antwortpaket vom Server

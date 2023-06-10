@@ -9,6 +9,7 @@ import (
 // Stellt das Gerüst für ein Server Modul dar
 type ServerModule interface {
 	IsIpBasedServer() bool
+	GetLocalIPBasedPort() uint64
 	RegisterKernel(kernel *Kernel) error
 	GetObjectId() string
 	GetProtocol() string

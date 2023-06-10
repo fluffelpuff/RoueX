@@ -718,7 +718,7 @@ func (obj *WebsocketKernelConnection) FinallyInit() error {
 
 // Gibt das verwendete Protokoll an
 func (obj *WebsocketKernelConnection) GetProtocol() string {
-	return "ws"
+	return "wstcp"
 }
 
 // Gibt an ob eine Verbindung aufgebaut wurde

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -70,7 +71,7 @@ func (obj *WebsocketKernelClient) GetMetaDataInfo() kernel.ClientModuleMetaData 
 
 // Gibt das Protokoll des Moduls aus
 func (obj *WebsocketKernelClient) GetProtocol() string {
-	return "ws"
+	return "wstcp"
 }
 
 // Stellt eine neue Websocket Verbindung her
@@ -192,27 +193,14 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 		RandClientPKey:    temp_public_key.SerializeCompressed(),
 		RandClientPKeySig: temp_key_signature,
 		ClientSig:         relay_signature,
-		Version:           static.RoueXVersion{},
-		Flags:             []*WSPackageFlag{},
+		Version:           static.VERSION,
+		Flags:             []WSPackageFlag{},
 	}
 
 	// Sollte ein P2P Socket vorhanden sein wird ein Flag eintrag dem Paket hinzugefügt
 	for i := range p2p_sockets {
-		// Der Port wird in Bytes umgewandelt
-		byted_port := utils.IntToBytes(int(p2p_sockets[i].Port))
-
 		// Der Flagwert wird erstellt
-		f_value := &WSPackageFlag{Value: byted_port}
-
-		// Es wird ermittelt ob es sich um ein bekanntes Package Flag handelt
-		switch p2p_sockets[i].Protocol {
-		case "ws_tcp":
-			f_value.Flag = [2]byte{0, 0}
-		case "ws_quic":
-			f_value.Flag = [2]byte{0, 1}
-		default:
-			continue
-		}
+		f_value := WSPackageFlag{Value: []byte(p2p_sockets[i].Protocol + ":" + strconv.Itoa(int(p2p_sockets[i].Port))), Flag: []byte("server")}
 
 		// Das Protokoll wird als Flag hinzugefügt
 		plain_client_hello_package.Flags = append(plain_client_hello_package.Flags, f_value)
@@ -312,7 +300,7 @@ func (obj *WebsocketKernelClient) ConnectTo(url_str string, pub_key *btcec.Publi
 	// Solte kein Vertrauenswürdiger Relay vorhanden sein, wird ein Temporärer Relay erzeugt
 	if relay_pkyobj == nil {
 		c_time := time.Now().Unix()
-		relay_pkyobj = kernel.NewUntrustedRelay(pub_key, c_time, url_str, "ws")
+		relay_pkyobj = kernel.NewUntrustedRelay(pub_key, c_time, url_str, "wstcp")
 		log.Println("Unkown relay", hex.EncodeToString(pub_key.SerializeCompressed()), "connected")
 	} else {
 		log.Println("Trusted relay", hex.EncodeToString(pub_key.SerializeCompressed()), "connected")

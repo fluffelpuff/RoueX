@@ -301,15 +301,33 @@ func (obj *Kernel) GetIPBasedServersForP2PConnection(res_ip string) []P2PKernelS
 	defer obj._lock.Unlock()
 
 	// Es werden alle Server Module herausgesucht
+	results := []P2PKernelServerWithProtocol{}
 	for i := range obj._server_modules {
 		csmodule := obj._server_modules[i]
 
 		// check if is a ip based server module
 		if csmodule.IsIpBasedServer() {
-
+			results = append(results, P2PKernelServerWithProtocol{Protocol: csmodule.GetProtocol(), Port: csmodule.GetLocalIPBasedPort()})
 		}
 	}
 
-	fmt.Println("AAA:           ", res_ip)
-	return nil
+	// Die Daten werden zurückgegeben
+	return results
+}
+
+// Gibt ein verfügabres Client Protokoll zurück
+func (obj *Kernel) GetClientProtocolByName(prot_name string) (ClientModule, error) {
+	// Das Verfügbare Protokoll wird herausgesucht
+	for item := range obj._client_modules {
+		// Das Item wird ausgewählt
+		cclient := obj._client_modules[item]
+
+		// Es wird geprüft ob das Protokoll mit der Gegenseite übereinstimmt
+		if cclient.GetProtocol() == prot_name {
+			return cclient, nil
+		}
+	}
+
+	// Es wurde kein passendes Protokoll gefunden
+	return nil, nil
 }

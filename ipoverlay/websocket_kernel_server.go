@@ -7,8 +7,10 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/fluffelpuff/RoueX/kernel"
 	"github.com/fluffelpuff/RoueX/utils"
@@ -270,7 +272,7 @@ func (obj *WebsocketKernelServerEP) Start() error {
 
 // Gibt das Aktuelle Protokoll aus
 func (obj *WebsocketKernelServerEP) GetProtocol() string {
-	return "ws"
+	return "wstcp"
 }
 
 // Gibt die Aktuelle Objekt ID aus
@@ -281,6 +283,43 @@ func (obj *WebsocketKernelServerEP) GetObjectId() string {
 // Gibt an ob der Server bereits gestartet wurde
 func (obj *WebsocketKernelServerEP) IsRunning() bool {
 	return false
+}
+
+// Gibt den Verwendeten Port zurück
+func (obj *WebsocketKernelServerEP) GetLocalIPBasedPort() uint64 {
+	return uint64(obj._port)
+}
+
+// Startet den Versuch eine ausgehende Verbindung aufzubauen
+func (obj *WebsocketKernelServerEP) TryToP2PConnectionOthersideByFlag(remote_socket_adr *net.TCPAddr, rflgag WSPackageFlag) {
+	// Es wird geprüft ob es sich um ein zulässiges Flag handelt
+	if !bytes.Equal(rflgag.Flag, []byte("server")) {
+		panic("Unkown flag for this function, unkown internal error")
+	}
+
+	// Es wird geprüft ob es sich bei dem 'Value' um einen zulässigen UTF8 String handelt
+	if valid := utf8.Valid(rflgag.Value); !valid {
+		return
+	}
+
+	// Es wird versucht den Endpunkt einzulesen
+	str_value := string(rflgag.Value)
+
+	// Der String wird aufgesplitet
+	splited_string := strings.Split(str_value, ":")
+
+	// Es wird geprüft ob 2 Einträge vorhanden sind
+	if len(splited_string) != 2 {
+		return
+	}
+
+	// Es wird geprüft ob es ein passendes Client Protokol gibt
+	prot, err := obj._kernel.GetClientProtocolByName(splited_string[0])
+	if err != nil {
+		fmt.Println("TryToP2PConnectionOthersideByFlag: " + err.Error())
+	}
+
+	fmt.Println("PROTOCOL", prot)
 }
 
 // Upgradet die HTTP Verbindung und erstellt eine Client Sitzung daraus
@@ -436,7 +475,7 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	// Solte kein Vertrauenswürdiger Relay vorhanden sein, wird ein Temporärer Relay erzeugt
 	if relay_obj == nil {
 		c_time := time.Now().Unix()
-		relay_obj = kernel.NewUntrustedRelay(pub_client_key, c_time, r.Host, "ws")
+		relay_obj = kernel.NewUntrustedRelay(pub_client_key, c_time, r.Host, "wstcp")
 	}
 
 	// Es wird ein ECDH Schlüssel für die OTK Schlüssel beider Relays erstellt
@@ -480,6 +519,15 @@ func (obj *WebsocketKernelServerEP) upgradeHTTPConnAndRegister(w http.ResponseWr
 	if err := conn_obj.FinallyInit(); err != nil {
 		obj._kernel.RemoveConnection(conn_obj)
 		conn.Close()
+	}
+
+	// Die P2P Server flags werden verarbeitet
+	for i := range decrypted_chpackage.Flags {
+		// Es wird geprüft ob es sich um ein Server Flag handelt,
+		// sollte es sich um ein unbekanntes Flag handelt wird der Vorgang abgebrochen
+		if bytes.Equal(decrypted_chpackage.Flags[i].Flag, []byte("server")) {
+			go obj.TryToP2PConnectionOthersideByFlag(remote_sock_adr, decrypted_chpackage.Flags[i])
+		}
 	}
 }
 

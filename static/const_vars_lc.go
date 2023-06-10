@@ -37,9 +37,6 @@ const (
 	// Gibt den Adressprefix an
 	ADDRESS_PREFIX string = "rx"
 
-	// Gibt die Version an
-	VERSION uint64 = 1000000
-
 	// Gibt den Standard WS-Port an
 	WS_PORT uint64 = 9382
 

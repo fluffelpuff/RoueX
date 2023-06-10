@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -36,6 +37,8 @@ type Kernel struct {
 	_temp_ecdh_keys        map[string][]byte
 	_protocols             map[int]*KernelPackageProtocolEntry
 	_memory                kernel_package_buffer
+	_system_signal         chan os.Signal
+	_shutdown_signal       chan bool
 	_shutdown_complete     bool
 }
 
@@ -77,6 +80,8 @@ func (obj *Kernel) RegisterAPIInterface(api_interace *KernelAPI) error {
 func (obj *Kernel) IsLocallyAddress(pubkey btcec.PublicKey) bool {
 	return bytes.Equal(pubkey.SerializeCompressed(), obj._private_key.PubKey().SerializeCompressed())
 }
+
+// Wird verwendet um die Aktuelle Uhrzeit von den NTP Servern abzurufen
 
 // Erstellt einen UNIX Kernel
 func CreateUnixKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
@@ -140,6 +145,8 @@ func CreateUnixKernel(priv_key *btcec.PrivateKey) (*Kernel, error) {
 		_socket_path:           static.GetFilePathFor(static.API_SOCKET),
 		_protocols:             make(map[int]*KernelPackageProtocolEntry),
 		_directory_services:    make([]RelayDirectoryService, 0),
+		_system_signal:         make(chan os.Signal, 1),
+		_shutdown_signal:       make(chan bool),
 		_shutdown_complete:     false,
 	}
 
